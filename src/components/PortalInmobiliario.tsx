@@ -34,8 +34,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 const SITE_NAME = "MARLO Propiedades";
 const CLP = new Intl.NumberFormat("es-CL", { style: "currency", currency: "CLP", maximumFractionDigits: 0 });
 
-// Tu CSV público de Google Sheets:
+// Contacto oficial
+const PHONE_1_DISPLAY = "+56 9 7108 7515";
+const PHONE_2_DISPLAY = "+56 9 7108 7513";
+const PHONE_1_RAW = "56971087515"; // tel:/wa.me
+const PHONE_2_RAW = "56971087513";
+const EMAIL = "arriendo@marlopropiedades.cl";
+
+// CSV público (usa env si está definida)
 const SHEET_CSV =
+  process.env.NEXT_PUBLIC_SHEET_CSV ||
   "https://docs.google.com/spreadsheets/d/e/2PACX-1vQtd7uOhNIGnCPVvyYPZZNsyiJombpwAm-ZzlYF7HXlpoXQ0jNUNhjCFGtWYADOdHiGY0MAT-cqMykq/pub?output=csv";
 
 const capitalize = (s: string) => (s?.charAt(0).toUpperCase() || "") + (s?.slice(1) || "");
@@ -68,7 +76,7 @@ const MOCK = [
     descripcion:
       "Luminoso, orientación oriente, a 3 cuadras del metro Los Leones. Cocina equipada, logia independiente y terraza.",
     etiquetas: ["Cerca del metro", "Con bodega", "Amoblado opcional"],
-    contacto: { nombre: "MARLO", telefono: "9 6105 0539", email: "contacto@marlo.cl" },
+    contacto: { nombre: "MARLO", telefono: "9 7108 7515", email: EMAIL },
   },
   {
     id: "p-002",
@@ -94,7 +102,7 @@ const MOCK = [
     descripcion:
       "Barrio residencial tranquilo. Ampliación regularizada, cocina americana y suite principal con walking closet.",
     etiquetas: ["Patio amplio", "Quincho", "Listo para mudarse"],
-    contacto: { nombre: "MARLO", telefono: "9 6105 0539", email: "ventas@marlo.cl" },
+    contacto: { nombre: "MARLO", telefono: "9 7108 7515", email: EMAIL },
   },
   {
     id: "p-003",
@@ -119,7 +127,7 @@ const MOCK = [
     descripcion:
       "Edificio clase A, con conserjería 24/7. Incluye 1 estacionamiento y bodega opcional.",
     etiquetas: ["Clase A", "Alta conectividad"],
-    contacto: { nombre: "MARLO", telefono: "9 6105 0539", email: "oficinas@marlo.cl" },
+    contacto: { nombre: "MARLO", telefono: "9 7108 7515", email: EMAIL },
   },
 ];
 
@@ -155,8 +163,8 @@ function mapRow(r: any, i: number) {
       .filter(Boolean),
     contacto: {
       nombre: r.contactoNombre || "MARLO",
-      telefono: r.contactoTelefono || "9 6105 0539",
-      email: r.contactoEmail || "contacto@marlo.cl",
+      telefono: r.contactoTelefono || "9 7108 7515",
+      email: r.contactoEmail || EMAIL,
     },
   };
 }
@@ -608,41 +616,44 @@ export default function PortalInmobiliario() {
       </section>
 
       {/* Contacto */}
-<section id="contacto" className="mt-16 rounded-2xl border bg-white/60 p-6 shadow-sm">
-  <h2 className="text-xl font-semibold mb-3">Contáctanos</h2>
+      <section id="contacto" className="mt-16 rounded-2xl border bg-white/60 p-6 shadow-sm">
+        <h2 className="text-xl font-semibold mb-3">Contáctanos</h2>
 
-  <div className="grid gap-3 sm:grid-cols-2">
-    <div className="flex items-center gap-3">
-      <span className="inline-block h-9 w-9 rounded-full bg-black/5 grid place-items-center">📞</span>
-      <a href={`tel:+${PHONE_1_RAW}`} className="hover:underline">
-        {PHONE_1_DISPLAY}
-      </a>
-    </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="flex items-center gap-3">
+            <span className="inline-block h-9 w-9 rounded-full bg-black/5 grid place-items-center">📞</span>
+            <a href={`tel:+${PHONE_1_RAW}`} className="hover:underline">
+              {PHONE_1_DISPLAY}
+            </a>
+          </div>
 
-    <div className="flex items-center gap-3">
-      <span className="inline-block h-9 w-9 rounded-full bg-black/5 grid place-items-center">📞</span>
-      <a href={`tel:+${PHONE_2_RAW}`} className="hover:underline">
-        {PHONE_2_DISPLAY}
-      </a>
-    </div>
+          <div className="flex items-center gap-3">
+            <span className="inline-block h-9 w-9 rounded-full bg-black/5 grid place-items-center">📞</span>
+            <a href={`tel:+${PHONE_2_RAW}`} className="hover:underline">
+              {PHONE_2_DISPLAY}
+            </a>
+          </div>
 
-    <div className="flex items-center gap-3">
-      <span className="inline-block h-9 w-9 rounded-full bg-black/5 grid place-items-center">✉️</span>
-      <a href={`mailto:${EMAIL}`} className="hover:underline">
-        {EMAIL}
-      </a>
-    </div>
+          <div className="flex items-center gap-3">
+            <span className="inline-block h-9 w-9 rounded-full bg-black/5 grid place-items-center">✉️</span>
+            <a href={`mailto:${EMAIL}`} className="hover:underline">
+              {EMAIL}
+            </a>
+          </div>
 
-    <div className="flex items-center gap-3">
-      <span className="inline-block h-9 w-9 rounded-full bg-black/5 grid place-items-center">💬</span>
-      <a
-        href={`https://wa.me/${PHONE_1_RAW}`}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm hover:bg-black/5"
-      >
-        WhatsApp (principal)
-      </a>
+          <div className="flex items-center gap-3">
+            <span className="inline-block h-9 w-9 rounded-full bg-black/5 grid place-items-center">💬</span>
+            <a
+              href={`https://wa.me/${PHONE_1_RAW}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm hover:bg-black/5"
+            >
+              WhatsApp (principal)
+            </a>
+          </div>
+        </div>
+      </section>
     </div>
-  </div>
-</section>
+  );
+}
