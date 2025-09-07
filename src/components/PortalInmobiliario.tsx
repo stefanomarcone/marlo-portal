@@ -607,21 +607,42 @@ export default function PortalInmobiliario() {
         </div>
       </section>
 
-      {/* FOOTER */}
-      <footer id="contacto" className="border-t bg-neutral-50">
-        <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-4 p-6 text-center md:flex-row md:text-left">
-          <div className="text-sm text-muted-foreground">
-            © {new Date().getFullYear()} {SITE_NAME} · Hecho con ❤️
-          </div>
-          <div className="flex flex-wrap items-center justify-center gap-3 text-sm">
-            <a href="mailto:contacto@marlo.cl" className="hover:underline">contacto@marlo.cl</a>
-            <span>·</span>
-            <a href="tel:+56961050539" className="hover:underline">+56 9 6105 0539</a>
-            <span>·</span>
-            <a href="https://wa.me/56961050539" target="_blank" rel="noreferrer" className="hover:underline">WhatsApp</a>
-          </div>
-        </div>
-      </footer>
+      {/* Contacto */}
+<section id="contacto" className="mt-16 rounded-2xl border bg-white/60 p-6 shadow-sm">
+  <h2 className="text-xl font-semibold mb-3">Contáctanos</h2>
+
+  <div className="grid gap-3 sm:grid-cols-2">
+    <div className="flex items-center gap-3">
+      <span className="inline-block h-9 w-9 rounded-full bg-black/5 grid place-items-center">📞</span>
+      <a href={`tel:+${PHONE_1_RAW}`} className="hover:underline">
+        {PHONE_1_DISPLAY}
+      </a>
     </div>
-  );
-}
+
+    <div className="flex items-center gap-3">
+      <span className="inline-block h-9 w-9 rounded-full bg-black/5 grid place-items-center">📞</span>
+      <a href={`tel:+${PHONE_2_RAW}`} className="hover:underline">
+        {PHONE_2_DISPLAY}
+      </a>
+    </div>
+
+    <div className="flex items-center gap-3">
+      <span className="inline-block h-9 w-9 rounded-full bg-black/5 grid place-items-center">✉️</span>
+      <a href={`mailto:${EMAIL}`} className="hover:underline">
+        {EMAIL}
+      </a>
+    </div>
+
+    <div className="flex items-center gap-3">
+      <span className="inline-block h-9 w-9 rounded-full bg-black/5 grid place-items-center">💬</span>
+      <a
+        href={`https://wa.me/${PHONE_1_RAW}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm hover:bg-black/5"
+      >
+        WhatsApp (principal)
+      </a>
+    </div>
+  </div>
+</section>
