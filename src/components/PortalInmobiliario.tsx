@@ -1,659 +1,119 @@
 "use client";
+import { useState, useEffect, useRef } from "react";
 
-import React, { useMemo, useState, useEffect } from "react";
-import Papa from "papaparse";
-import {
-  Building2,
-  BedDouble,
-  Bath,
-  MapPin,
-  Home,
-  Ruler,
-  Phone,
-  Mail,
-  Heart,
-  Filter,
-  Search,
-  Check,
-  MessageSquare,
-  ImageIcon,
-} from "lucide-react";
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { Slider } from "@/components/ui/slider";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-
-// ————————————————————————————————————————
-// CONFIG
-// ————————————————————————————————————————
-const SITE_NAME = "MARLO Propiedades";
-const CLP = new Intl.NumberFormat("es-CL", { style: "currency", currency: "CLP", maximumFractionDigits: 0 });
-
-// Contacto oficial
-const PHONE_1_DISPLAY = "+56 9 7108 7515";
-const PHONE_2_DISPLAY = "+56 9 7108 7513";
-const PHONE_1_RAW = "56971087515"; // tel:/wa.me
-const PHONE_2_RAW = "56971087513";
-const EMAIL = "arriendo@marlopropiedades.cl";
-
-// CSV público (usa env si está definida)
-const SHEET_CSV =
-  process.env.NEXT_PUBLIC_SHEET_CSV ||
-  "https://docs.google.com/spreadsheets/d/e/2PACX-1vQtd7uOhNIGnCPVvyYPZZNsyiJombpwAm-ZzlYF7HXlpoXQ0jNUNhjCFGtWYADOdHiGY0MAT-cqMykq/pub?output=csv";
-
-const capitalize = (s: string) => (s?.charAt(0).toUpperCase() || "") + (s?.slice(1) || "");
-
-// ————————————————————————————————————————
-// DATOS LOCAL (fallback si la hoja está vacía)
-// ————————————————————————————————————————
-const MOCK = [
-  {
-    id: "p-001",
-    titulo: "Depto 2D/1B con bodega y estacionamiento",
-    operacion: "arriendo",
-    tipo: "departamento",
-    comuna: "Providencia",
-    ciudad: "Santiago",
-    direccion: "Av. Los Leones 1234",
-    precio: 750000,
-    gastosComunes: 90000,
-    dormitorios: 2,
-    banos: 1,
-    metrosUtiles: 58,
-    metrosTotales: 65,
-    estacionamientos: 1,
-    bodega: 1,
-    destacado: true,
-    imagenes: [
-      "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?q=80&w=1600&auto=format&fit=crop",
-      "https://images.unsplash.com/photo-1616596872209-61c9f2be89fb?q=80&w=1600&auto=format&fit=crop",
-    ],
-    descripcion:
-      "Luminoso, orientación oriente, a 3 cuadras del metro Los Leones. Cocina equipada, logia independiente y terraza.",
-    etiquetas: ["Cerca del metro", "Con bodega", "Amoblado opcional"],
-    contacto: { nombre: "MARLO", telefono: "9 7108 7515", email: EMAIL },
-  },
-  {
-    id: "p-002",
-    titulo: "Casa 3D/3B con patio y quincho",
-    operacion: "venta",
-    tipo: "casa",
-    comuna: "Viña del Mar",
-    ciudad: "Valparaíso",
-    direccion: "Calle Las Magnolias 987",
-    precio: 189000000,
-    gastosComunes: 0,
-    dormitorios: 3,
-    banos: 3,
-    metrosUtiles: 120,
-    metrosTotales: 240,
-    estacionamientos: 2,
-    bodega: 0,
-    destacado: false,
-    imagenes: [
-      "https://images.unsplash.com/photo-1570129477492-45c003edd2be?q=80&w=1600&auto=format&fit=crop",
-      "https://images.unsplash.com/photo-1507089947368-19c1da9775ae?q=80&w=1600&auto=format&fit=crop",
-    ],
-    descripcion:
-      "Barrio residencial tranquilo. Ampliación regularizada, cocina americana y suite principal con walking closet.",
-    etiquetas: ["Patio amplio", "Quincho", "Listo para mudarse"],
-    contacto: { nombre: "MARLO", telefono: "9 7108 7515", email: EMAIL },
-  },
-  {
-    id: "p-003",
-    titulo: "Oficina 45 m² planta libre, vista despejada",
-    operacion: "arriendo",
-    tipo: "oficina",
-    comuna: "Las Condes",
-    ciudad: "Santiago",
-    direccion: "Apoquindo 4500",
-    precio: 620000,
-    gastosComunes: 110000,
-    dormitorios: 0,
-    banos: 1,
-    metrosUtiles: 45,
-    metrosTotales: 50,
-    estacionamientos: 1,
-    bodega: 0,
-    destacado: false,
-    imagenes: [
-      "https://images.unsplash.com/photo-1524758631624-e2822e304c36?q=80&w=1600&auto=format&fit=crop",
-    ],
-    descripcion:
-      "Edificio clase A, con conserjería 24/7. Incluye 1 estacionamiento y bodega opcional.",
-    etiquetas: ["Clase A", "Alta conectividad"],
-    contacto: { nombre: "MARLO", telefono: "9 7108 7515", email: EMAIL },
-  },
-];
-
-// ————————————————————————————————————————
-// MAPEADOR DE FILAS DEL CSV
-// ————————————————————————————————————————
-function mapRow(r: any, i: number) {
-  return {
-    id: r.id || `sheet-${i}`,
-    titulo: r.titulo || "",
-    operacion: String(r.operacion || "venta").toLowerCase() as "venta" | "arriendo",
-    tipo: String(r.tipo || "departamento").toLowerCase(),
-    comuna: r.comuna || "",
-    ciudad: r.ciudad || "",
-    direccion: r.direccion || "",
-    precio: Number(r.precio || 0),
-    gastosComunes: Number(r.gastosComunes || 0),
-    dormitorios: Number(r.dormitorios || 0),
-    banos: Number(r.banos || 0),
-    metrosUtiles: Number(r.metros || r.metrosUtiles || 0),
-    metrosTotales: Number(r.metrosTotales || r.metros || 0),
-    estacionamientos: Number(r.estacionamientos || 0),
-    bodega: Number(r.bodega || 0),
-    destacado: String(r.destacado || "").toLowerCase() === "si",
-    imagenes: String(r.fotos || r.imagenes || "")
-      .split(";")
-      .map((s: string) => s.trim())
-      .filter(Boolean),
-    descripcion: r.descripcion || "",
-    etiquetas: String(r.etiquetas || "")
-      .split(";")
-      .map((s: string) => s.trim())
-      .filter(Boolean),
-    contacto: {
-      nombre: r.contactoNombre || "MARLO",
-      telefono: r.contactoTelefono || "9 7108 7515",
-      email: r.contactoEmail || EMAIL,
-    },
-  };
+interface Property {
+  id: number; titulo: string; operacion: string; precio: number; tipo: string;
+  dormitorios: number; banos: number; metros: number; comuna: string; ciudad: string;
+  direccion: string; gastos_comunes: number; estacionamientos: number; bodega: string;
+  destacado: boolean; imagenes: string; descripcion: string; etiquetas: string;
 }
 
-// ————————————————————————————————————————
-// COMPONENTE PRINCIPAL
-// ————————————————————————————————————————
+const SAMPLE_PROPERTIES: Property[] = [
+  { id:1, titulo:"Departamento Premium en Las Condes", operacion:"venta", precio:185000000, tipo:"departamento", dormitorios:3, banos:2, metros:98, comuna:"Las Condes", ciudad:"Santiago", direccion:"Av. Apoquindo 4500", gastos_comunes:120000, estacionamientos:2, bodega:"Sí", destacado:true, imagenes:"https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800;https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=800;https://images.unsplash.com/photo-1600566753086-00f18fb6b3ea?w=800", descripcion:"Espectacular departamento con vista panorámica, pisos de porcelanato, cocina equipada y terraza con asador. Edificio con piscina, gimnasio y salón de eventos.", etiquetas:"vista panorámica;piscina;gimnasio" },
+  { id:2, titulo:"Casa Familiar en Providencia", operacion:"venta", precio:320000000, tipo:"casa", dormitorios:4, banos:3, metros:180, comuna:"Providencia", ciudad:"Santiago", direccion:"Calle Los Leones 1200", gastos_comunes:0, estacionamientos:2, bodega:"Sí", destacado:true, imagenes:"https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=800;https://images.unsplash.com/photo-1600573472592-401b489a3cdc?w=800;https://images.unsplash.com/photo-1600047509807-ba8f99d2cdde?w=800", descripcion:"Hermosa casa de dos pisos con amplio jardín, living comedor con doble altura, 4 dormitorios en suite y quincho techado.", etiquetas:"jardín;quincho;doble altura" },
+  { id:3, titulo:"Oficina Moderna en Vitacura", operacion:"arriendo", precio:950000, tipo:"oficina", dormitorios:0, banos:1, metros:55, comuna:"Vitacura", ciudad:"Santiago", direccion:"Av. Nueva Costanera 3900", gastos_comunes:85000, estacionamientos:1, bodega:"No", destacado:false, imagenes:"https://images.unsplash.com/photo-1497366216548-37526070297c?w=800;https://images.unsplash.com/photo-1497366811353-6870744d04b2?w=800", descripcion:"Oficina equipada en edificio corporativo clase A. Incluye recepción compartida, sala de reuniones y estacionamiento de visitas.", etiquetas:"corporativo;equipada" },
+  { id:4, titulo:"Departamento Estudio en Ñuñoa", operacion:"arriendo", precio:420000, tipo:"departamento", dormitorios:1, banos:1, metros:35, comuna:"Ñuñoa", ciudad:"Santiago", direccion:"Av. Irarrázaval 2800", gastos_comunes:65000, estacionamientos:0, bodega:"No", destacado:false, imagenes:"https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=800;https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=800", descripcion:"Acogedor departamento estudio full amoblado, ideal para profesionales. Cerca del metro, comercio y áreas verdes.", etiquetas:"amoblado;metro cercano" },
+  { id:5, titulo:"Parcela con Casa Patronal en Colina", operacion:"venta", precio:450000000, tipo:"parcela", dormitorios:5, banos:4, metros:350, comuna:"Colina", ciudad:"Santiago", direccion:"Camino Chicureo Km 5", gastos_comunes:0, estacionamientos:4, bodega:"Sí", destacado:true, imagenes:"https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=800;https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800;https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=800", descripcion:"Impresionante parcela de 5.000 m² con casa patronal completamente remodelada. Piscina temperada, caballeriza y huerto.", etiquetas:"parcela;piscina;caballeriza" },
+  { id:6, titulo:"Loft Industrial en Santiago Centro", operacion:"arriendo", precio:680000, tipo:"departamento", dormitorios:1, banos:1, metros:62, comuna:"Santiago", ciudad:"Santiago", direccion:"Calle Morandé 360", gastos_comunes:90000, estacionamientos:0, bodega:"Sí", destacado:false, imagenes:"https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?w=800;https://images.unsplash.com/photo-1600607687644-aac4c3eac7f4?w=800", descripcion:"Loft de estilo industrial con cielos de 4 metros, vigas a la vista y ventanales de piso a techo.", etiquetas:"loft;industrial;céntrico" }
+];
+
+const SHEET_CSV_URL = "";
+
+async function loadPropertiesFromCSV(): Promise<Property[]> {
+  if (!SHEET_CSV_URL) return SAMPLE_PROPERTIES;
+  try {
+    const res = await fetch(SHEET_CSV_URL);
+    const text = await res.text();
+    const lines = text.split("\n").filter(l => l.trim());
+    if (lines.length < 2) return SAMPLE_PROPERTIES;
+    const headers = lines[0].split(",").map(h => h.trim().toLowerCase());
+    return lines.slice(1).map((line, i) => {
+      const vals = line.split(",").map(v => v.trim().replace(/^"|"$/g, ""));
+      const get = (key: string) => vals[headers.indexOf(key)] || "";
+      return { id: i+1, titulo: get("titulo"), operacion: get("operacion"), precio: parseInt(get("precio"))||0, tipo: get("tipo"), dormitorios: parseInt(get("dormitorios"))||0, banos: parseInt(get("banos"))||0, metros: parseInt(get("metros"))||0, comuna: get("comuna"), ciudad: get("ciudad"), direccion: get("direccion"), gastos_comunes: parseInt(get("gastos_comunes"))||0, estacionamientos: parseInt(get("estacionamientos"))||0, bodega: get("bodega"), destacado: get("destacado")==="sí"||get("destacado")==="true", imagenes: get("imagenes"), descripcion: get("descripcion"), etiquetas: get("etiquetas") };
+    });
+  } catch { return SAMPLE_PROPERTIES; }
+}
+
+const formatCLP = (n: number) => { if(n>=1000000) return `$${(n/1000000).toFixed(0)} M`; if(n>=1000) return `$${(n/1000).toFixed(0)} mil`; return `$${n.toLocaleString("es-CL")}`; };
+const formatFullCLP = (n: number) => `$${n.toLocaleString("es-CL")}`;
+
+const I = {
+  bed:<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 7v11"/><path d="M21 7v11"/><path d="M3 18h18"/><path d="M3 11h18"/><path d="M3 7h18v4H3z"/><rect x="5" y="7" width="4" height="4" rx="1"/></svg>,
+  bath:<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 12h16a1 1 0 011 1v3a4 4 0 01-4 4H7a4 4 0 01-4-4v-3a1 1 0 011-1z"/><path d="M6 12V5a2 2 0 012-2h3v2.25"/></svg>,
+  area:<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 3v18"/></svg>,
+  car:<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 17h14v-5l-2-6H7L5 12z"/><circle cx="7.5" cy="17.5" r="1.5"/><circle cx="16.5" cy="17.5" r="1.5"/></svg>,
+  phone:<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6A19.79 19.79 0 012.12 4.18 2 2 0 014.11 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg>,
+  mail:<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 7l-10 7L2 7"/></svg>,
+  wa:<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>,
+  close:<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>,
+  chevL:<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M15 18l-6-6 6-6"/></svg>,
+  chevR:<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M9 18l6-6-6-6"/></svg>,
+  pin:<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>,
+  search:<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>,
+  star:<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26"/></svg>,
+  menu:<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>,
+};
+
+const C = { gold:"#C8A45A", goldLight:"#E8D5A0", dark:"#1A1A1A", darkAlt:"#242424", charcoal:"#2D2D2D", warmGray:"#8C8579", cream:"#FAF8F4", white:"#FFFFFF", accent:"#3D6B5E" };
+
 export default function PortalInmobiliario() {
-  // 1) Carga remota desde Google Sheets (CSV)
-  const [remoto, setRemoto] = useState<any[]>([]);
-  useEffect(() => {
-    fetch(SHEET_CSV)
-      .then((r) => r.text())
-      .then((csv) => {
-        const parsed = Papa.parse(csv, { header: true, skipEmptyLines: true });
-        const filas = (parsed.data as any[]).map(mapRow);
-        setRemoto(filas);
-      })
-      .catch(() => {});
-  }, []);
+  const [section, setSection] = useState("inicio");
+  const [properties, setProperties] = useState<Property[]>(SAMPLE_PROPERTIES);
+  const [filterOp, setFilterOp] = useState("todas");
+  const [filterType, setFilterType] = useState("todos");
+  const [searchText, setSearchText] = useState("");
+  const [selectedProp, setSelectedProp] = useState<Property|null>(null);
+  const [imgIdx, setImgIdx] = useState(0);
+  const [mobileMenu, setMobileMenu] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+  const propRef = useRef<HTMLDivElement>(null);
 
-  // 2) Carga local desde /admin (localStorage)
-  const [extras, setExtras] = useState<any[]>([]);
-  useEffect(() => {
-    try {
-      setExtras(JSON.parse(localStorage.getItem("marlo-props") || "[]"));
-    } catch {}
-  }, []);
+  useEffect(() => { loadPropertiesFromCSV().then(setProperties); }, []);
+  useEffect(() => { const h = () => setScrolled(window.scrollY > 60); window.addEventListener("scroll", h); return () => window.removeEventListener("scroll", h); }, []);
 
-  // 3) Mezclar todo y evitar duplicados por id (extras > remoto > mock)
-  const LISTA = useMemo(() => {
-    const map = new Map<string, any>();
-    for (const it of [...extras, ...remoto, ...MOCK]) {
-      if (!it) continue;
-      const id = String(it.id || "");
-      if (!map.has(id)) map.set(id || Math.random().toString(36).slice(2), it);
-    }
-    return Array.from(map.values());
-  }, [extras, remoto]);
+  const filtered = properties.filter(p => {
+    if (filterOp !== "todas" && p.operacion !== filterOp) return false;
+    if (filterType !== "todos" && p.tipo !== filterType) return false;
+    if (searchText && !p.titulo.toLowerCase().includes(searchText.toLowerCase()) && !p.comuna.toLowerCase().includes(searchText.toLowerCase())) return false;
+    return true;
+  });
 
-  const [query, setQuery] = useState("");
-  const [operacion, setOperacion] = useState("todas"); // todas | venta | arriendo
-  const [tipo, setTipo] = useState("todos"); // todos | casa | departamento | oficina | parcela | local
-  const [minDorms, setMinDorms] = useState(0);
-  const [rangoPrecio, setRangoPrecio] = useState<[number, number]>([0, 200000000]);
-  const [orden, setOrden] = useState("recientes");
-  const [soloDestacados, setSoloDestacados] = useState(false);
-  const [open, setOpen] = useState(false);
-  const [selected, setSelected] = useState<any>(null);
+  const scrollToProps = () => { setSection("propiedades"); setTimeout(() => propRef.current?.scrollIntoView({ behavior: "smooth" }), 100); };
+  const openProp = (p: Property) => { setSelectedProp(p); setImgIdx(0); document.body.style.overflow = "hidden"; };
+  const closeProp = () => { setSelectedProp(null); document.body.style.overflow = ""; };
 
-  const preciosMax = useMemo(() => {
-    const max = Math.max(...LISTA.map((p) => p.precio || 0));
-    return Math.ceil((isFinite(max) ? max : 0) / 1_000_000) * 1_000_000 || 1_000_000;
-  }, [LISTA]);
+  const navItems = [{ id:"inicio", label:"Inicio" },{ id:"nosotros", label:"Nosotros" },{ id:"servicios", label:"Servicios" },{ id:"propiedades", label:"Propiedades" },{ id:"contacto", label:"Contacto" }];
+  const services = [
+    { num:"01", title:"Corretaje de Propiedades", desc:"Intermediación profesional en compra, venta y arriendo de inmuebles residenciales y comerciales con asesoría en cada etapa." },
+    { num:"02", title:"Gestión Inmobiliaria", desc:"Administración integral de propiedades: cobranza de arriendos, contratos, mantención y relación con arrendatarios." },
+    { num:"03", title:"Tasación y Avalúo", desc:"Análisis profesional del valor de mercado basado en datos reales, comparables de zona y proyecciones del sector." },
+    { num:"04", title:"Asesoría Legal", desc:"Acompañamiento jurídico en contratos de compraventa, promesas, escrituras, estudios de títulos y trámites legales." },
+  ];
 
-  const resultados = useMemo(() => {
-    let list = [...LISTA];
-
-    if (operacion !== "todas") list = list.filter((p) => p.operacion === operacion);
-    if (tipo !== "todos") list = list.filter((p) => p.tipo === tipo);
-    if (minDorms > 0) list = list.filter((p) => (p.dormitorios || 0) >= minDorms);
-
-    list = list.filter(
-      (p) =>
-        p.titulo?.toLowerCase().includes(query.toLowerCase()) ||
-        p.comuna?.toLowerCase().includes(query.toLowerCase()) ||
-        p.ciudad?.toLowerCase().includes(query.toLowerCase()) ||
-        p.direccion?.toLowerCase().includes(query.toLowerCase())
-    );
-
-    list = list.filter((p) => (p.precio || 0) >= rangoPrecio[0] && (p.precio || 0) <= rangoPrecio[1]);
-    if (soloDestacados) list = list.filter((p) => p.destacado);
-
-    switch (orden) {
-      case "precio-asc":
-        list.sort((a, b) => (a.precio || 0) - (b.precio || 0));
-        break;
-      case "precio-desc":
-        list.sort((a, b) => (b.precio || 0) - (a.precio || 0));
-        break;
-      default:
-        list.sort((a, b) => (b.destacado ? 1 : 0) - (a.destacado ? 1 : 0));
-    }
-
-    return list;
-  }, [operacion, tipo, minDorms, query, rangoPrecio, orden, soloDestacados, LISTA]);
+  const css = `@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=DM+Sans:wght@300;400;500;600;700&display=swap');*{margin:0;padding:0;box-sizing:border-box;}html{scroll-behavior:smooth;}body{font-family:'DM Sans',sans-serif;background:${C.cream};color:${C.dark};overflow-x:hidden;}.nav{position:fixed;top:0;left:0;right:0;z-index:1000;transition:all .4s;background:${scrolled?"rgba(26,26,26,0.97)":"transparent"};backdrop-filter:${scrolled?"blur(20px)":"none"};border-bottom:${scrolled?"1px solid rgba(200,164,90,0.15)":"none"};padding:${scrolled?"12px 0":"20px 0"};}.nav-inner{max-width:1280px;margin:0 auto;padding:0 32px;display:flex;align-items:center;justify-content:space-between;}.logo-text{font-family:'Playfair Display',serif;font-size:26px;font-weight:700;color:${C.gold};letter-spacing:3px;cursor:pointer;}.logo-sub{font-family:'DM Sans',sans-serif;font-size:10px;color:rgba(255,255,255,0.6);letter-spacing:4px;text-transform:uppercase;margin-top:2px;}.nav-links{display:flex;gap:32px;align-items:center;}.nav-link{font-size:14px;font-weight:500;color:rgba(255,255,255,0.8);cursor:pointer;letter-spacing:1px;text-transform:uppercase;transition:color .3s;border:none;background:none;font-family:'DM Sans',sans-serif;}.nav-link:hover,.nav-link.active{color:${C.gold};}.nav-cta{background:${C.gold};color:${C.dark};padding:10px 24px;font-size:13px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;border:none;cursor:pointer;transition:all .3s;font-family:'DM Sans',sans-serif;}.nav-cta:hover{background:${C.goldLight};transform:translateY(-1px);}.mobile-toggle{display:none;background:none;border:none;color:white;cursor:pointer;}.mobile-menu{display:none;position:fixed;inset:0;background:rgba(26,26,26,0.98);z-index:999;flex-direction:column;align-items:center;justify-content:center;gap:28px;}.mobile-menu.open{display:flex;}.mobile-menu .nav-link{font-size:18px;color:white;}@media(max-width:768px){.nav-links{display:none;}.mobile-toggle{display:block;}}.hero{height:100vh;min-height:700px;position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden;}.hero-bg{position:absolute;inset:0;background:linear-gradient(135deg,${C.dark} 0%,#2a2520 50%,${C.charcoal} 100%);}.hero-pattern{position:absolute;inset:0;opacity:0.03;background-image:repeating-linear-gradient(45deg,transparent,transparent 35px,rgba(200,164,90,0.5) 35px,rgba(200,164,90,0.5) 36px);}.hero-overlay{position:absolute;inset:0;background:radial-gradient(ellipse at 30% 50%,rgba(200,164,90,0.08) 0%,transparent 60%);}.hero-content{position:relative;z-index:2;text-align:center;max-width:900px;padding:0 32px;animation:fadeUp .8s ease-out;}.hero-badge{display:inline-block;border:1px solid ${C.gold};color:${C.gold};font-size:11px;font-weight:600;letter-spacing:4px;text-transform:uppercase;padding:8px 20px;margin-bottom:32px;}.hero h1{font-family:'Playfair Display',serif;font-size:clamp(36px,6vw,72px);font-weight:700;color:${C.white};line-height:1.1;margin-bottom:20px;}.hero h1 span{color:${C.gold};}.hero-desc{font-size:clamp(16px,2vw,20px);color:rgba(255,255,255,0.6);line-height:1.7;max-width:600px;margin:0 auto 40px;font-weight:300;}.hero-btns{display:flex;gap:16px;justify-content:center;flex-wrap:wrap;}.btn-primary{background:${C.gold};color:${C.dark};padding:16px 40px;font-size:14px;font-weight:700;letter-spacing:2px;text-transform:uppercase;border:none;cursor:pointer;transition:all .3s;font-family:'DM Sans',sans-serif;}.btn-primary:hover{background:${C.goldLight};transform:translateY(-2px);box-shadow:0 8px 30px rgba(200,164,90,0.3);}.btn-outline{background:transparent;color:${C.white};padding:16px 40px;font-size:14px;font-weight:600;letter-spacing:2px;text-transform:uppercase;border:1px solid rgba(255,255,255,0.3);cursor:pointer;transition:all .3s;font-family:'DM Sans',sans-serif;}.btn-outline:hover{border-color:${C.gold};color:${C.gold};}.hero-stats{display:flex;gap:48px;justify-content:center;margin-top:60px;flex-wrap:wrap;}.stat{text-align:center;}.stat-num{font-family:'Playfair Display',serif;font-size:36px;font-weight:700;color:${C.gold};}.stat-label{font-size:12px;color:rgba(255,255,255,0.5);letter-spacing:2px;text-transform:uppercase;margin-top:4px;}@keyframes fadeUp{from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:translateY(0)}}.section{padding:100px 32px;max-width:1280px;margin:0 auto;}.section-label{font-size:12px;font-weight:600;letter-spacing:4px;text-transform:uppercase;color:${C.gold};margin-bottom:12px;}.section-title{font-family:'Playfair Display',serif;font-size:clamp(28px,4vw,44px);font-weight:600;color:${C.dark};margin-bottom:16px;line-height:1.2;}.section-desc{font-size:17px;color:${C.warmGray};max-width:600px;line-height:1.7;margin-bottom:48px;}.about-wrap{background:${C.white};}.about-grid{display:grid;grid-template-columns:1fr 1fr;gap:80px;align-items:center;}.about-img{aspect-ratio:4/5;background:linear-gradient(135deg,${C.dark},${C.charcoal});position:relative;overflow:hidden;}.about-img-inner{position:absolute;inset:0;background:url('https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=800') center/cover;opacity:0.7;}.about-img-overlay{position:absolute;bottom:0;left:0;right:0;padding:32px;background:linear-gradient(transparent,rgba(0,0,0,0.8));}.about-img-text{font-family:'Playfair Display',serif;font-size:22px;color:${C.gold};}.about-features{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:40px;}.about-feat{padding:20px;border:1px solid rgba(200,164,90,0.2);}.about-feat h4{font-family:'Playfair Display',serif;font-size:16px;color:${C.dark};margin-bottom:6px;}.about-feat p{font-size:13px;color:${C.warmGray};line-height:1.5;}@media(max-width:768px){.about-grid{grid-template-columns:1fr;gap:40px;}}.services-wrap{background:${C.dark};}.services-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:32px;}.service-card{background:${C.darkAlt};border:1px solid rgba(200,164,90,0.1);padding:40px 32px;transition:all .4s;position:relative;overflow:hidden;}.service-card::before{content:'';position:absolute;top:0;left:0;width:3px;height:0;background:${C.gold};transition:height .4s;}.service-card:hover::before{height:100%;}.service-card:hover{border-color:rgba(200,164,90,0.3);transform:translateY(-4px);}.service-num{font-family:'Playfair Display',serif;font-size:48px;font-weight:700;color:rgba(200,164,90,0.15);line-height:1;margin-bottom:16px;}.service-card h3{font-family:'Playfair Display',serif;font-size:20px;color:${C.white};margin-bottom:12px;}.service-card p{font-size:14px;color:rgba(255,255,255,0.5);line-height:1.7;}.props-wrap{background:${C.cream};}.filters{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:40px;}.filter-group{display:flex;}.filter-btn{padding:10px 20px;font-size:13px;font-weight:600;letter-spacing:1px;text-transform:uppercase;border:1px solid rgba(0,0,0,0.1);background:${C.white};color:${C.warmGray};cursor:pointer;transition:all .3s;font-family:'DM Sans',sans-serif;}.filter-btn.active{background:${C.dark};color:${C.gold};border-color:${C.dark};}.search-box{display:flex;align-items:center;gap:8px;border:1px solid rgba(0,0,0,0.1);background:${C.white};padding:0 16px;margin-left:auto;}.search-box input{border:none;outline:none;font-size:14px;padding:10px 0;width:200px;background:transparent;font-family:'DM Sans',sans-serif;}.search-box svg{color:${C.warmGray};}@media(max-width:768px){.search-box{margin-left:0;width:100%;}.search-box input{width:100%;}}.props-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:28px;}@media(max-width:480px){.props-grid{grid-template-columns:1fr;}}.prop-card{background:${C.white};border:1px solid rgba(0,0,0,0.06);overflow:hidden;cursor:pointer;transition:all .4s;}.prop-card:hover{transform:translateY(-6px);box-shadow:0 20px 50px rgba(0,0,0,0.08);}.prop-img{height:240px;position:relative;overflow:hidden;}.prop-img img{width:100%;height:100%;object-fit:cover;transition:transform .6s;}.prop-card:hover .prop-img img{transform:scale(1.05);}.prop-badge{position:absolute;top:16px;left:16px;padding:6px 14px;font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;}.prop-badge.venta{background:${C.gold};color:${C.dark};}.prop-badge.arriendo{background:${C.accent};color:${C.white};}.prop-dest{position:absolute;top:16px;right:16px;background:rgba(0,0,0,0.7);color:${C.gold};padding:4px 10px;font-size:10px;font-weight:700;letter-spacing:1px;display:flex;align-items:center;gap:4px;}.prop-body{padding:24px;}.prop-price{font-family:'Playfair Display',serif;font-size:24px;font-weight:700;color:${C.dark};margin-bottom:6px;}.prop-title{font-size:15px;font-weight:500;color:${C.charcoal};margin-bottom:4px;}.prop-loc{font-size:13px;color:${C.warmGray};display:flex;align-items:center;gap:4px;margin-bottom:16px;}.prop-specs{display:flex;gap:16px;padding-top:16px;border-top:1px solid rgba(0,0,0,0.06);}.prop-spec{display:flex;align-items:center;gap:6px;font-size:13px;color:${C.warmGray};}.prop-spec svg{color:${C.gold};}.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:2000;display:flex;align-items:center;justify-content:center;animation:fadeIn .3s;backdrop-filter:blur(4px);}.modal{background:${C.white};width:95%;max-width:980px;max-height:92vh;overflow-y:auto;position:relative;}.modal-close{position:absolute;top:16px;right:16px;z-index:10;background:rgba(0,0,0,0.6);border:none;color:white;width:40px;height:40px;display:flex;align-items:center;justify-content:center;cursor:pointer;}.modal-close:hover{background:rgba(0,0,0,0.9);}.modal-gallery{position:relative;height:420px;background:${C.dark};}.modal-gallery img{width:100%;height:100%;object-fit:cover;}.modal-nav{position:absolute;top:50%;transform:translateY(-50%);background:rgba(0,0,0,0.5);border:none;color:white;width:44px;height:44px;display:flex;align-items:center;justify-content:center;cursor:pointer;}.modal-nav:hover{background:rgba(200,164,90,0.8);}.modal-nav.left{left:12px;}.modal-nav.right{right:12px;}.modal-dots{position:absolute;bottom:16px;left:50%;transform:translateX(-50%);display:flex;gap:8px;}.modal-dot{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,0.4);border:none;cursor:pointer;}.modal-dot.active{background:${C.gold};width:24px;border-radius:4px;}.modal-body{padding:40px;}.modal-body .prop-badge{position:static;display:inline-block;margin-bottom:16px;}.modal-body h2{font-family:'Playfair Display',serif;font-size:28px;font-weight:600;color:${C.dark};margin-bottom:8px;}.modal-body .loc{font-size:15px;color:${C.warmGray};display:flex;align-items:center;gap:6px;margin-bottom:24px;}.modal-price-row{display:flex;align-items:baseline;gap:16px;margin-bottom:28px;flex-wrap:wrap;}.modal-price{font-family:'Playfair Display',serif;font-size:32px;font-weight:700;color:${C.dark};}.modal-gc{font-size:14px;color:${C.warmGray};}.modal-specs{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:16px;margin-bottom:32px;padding:24px;background:${C.cream};}.modal-spec{text-align:center;}.modal-spec-val{font-family:'Playfair Display',serif;font-size:22px;font-weight:700;color:${C.dark};}.modal-spec-label{font-size:11px;color:${C.warmGray};letter-spacing:1px;text-transform:uppercase;margin-top:2px;}.modal-desc{font-size:15px;line-height:1.8;color:#555;margin-bottom:28px;}.modal-tags{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:32px;}.modal-tag{padding:5px 14px;font-size:12px;color:${C.accent};border:1px solid rgba(61,107,94,0.3);font-weight:500;}.modal-contact{display:flex;gap:12px;flex-wrap:wrap;}.modal-wa{display:flex;align-items:center;gap:8px;background:#25D366;color:white;padding:14px 28px;font-size:14px;font-weight:700;letter-spacing:1px;text-transform:uppercase;border:none;cursor:pointer;transition:all .3s;text-decoration:none;}.modal-wa:hover{background:#20B858;transform:translateY(-2px);}.modal-call{display:flex;align-items:center;gap:8px;background:${C.dark};color:${C.gold};padding:14px 28px;font-size:14px;font-weight:600;border:none;cursor:pointer;transition:all .3s;text-decoration:none;}.modal-call:hover{background:${C.charcoal};}@media(max-width:768px){.modal-gallery{height:280px;}.modal-body{padding:24px;}}@keyframes fadeIn{from{opacity:0}to{opacity:1}}.contact-wrap{background:${C.dark};}.contact-grid{display:grid;grid-template-columns:1fr 1fr;gap:60px;}.contact-info h3{font-family:'Playfair Display',serif;font-size:18px;color:${C.gold};margin-bottom:16px;margin-top:28px;}.contact-info h3:first-child{margin-top:0;}.contact-item{display:flex;align-items:center;gap:12px;color:rgba(255,255,255,0.7);font-size:15px;margin-bottom:10px;}.contact-item svg{color:${C.gold};flex-shrink:0;}.contact-form{display:flex;flex-direction:column;gap:16px;}.contact-form input,.contact-form textarea{background:rgba(255,255,255,0.06);border:1px solid rgba(200,164,90,0.15);color:white;padding:14px 18px;font-size:14px;font-family:'DM Sans',sans-serif;outline:none;transition:border .3s;}.contact-form input:focus,.contact-form textarea:focus{border-color:${C.gold};}.contact-form textarea{resize:vertical;min-height:120px;}.contact-form button{background:${C.gold};color:${C.dark};padding:16px;font-size:14px;font-weight:700;letter-spacing:2px;text-transform:uppercase;border:none;cursor:pointer;transition:all .3s;font-family:'DM Sans',sans-serif;}.contact-form button:hover{background:${C.goldLight};}@media(max-width:768px){.contact-grid{grid-template-columns:1fr;}}.footer{background:${C.dark};border-top:1px solid rgba(200,164,90,0.1);padding:40px 32px;text-align:center;}.footer p{font-size:13px;color:rgba(255,255,255,0.4);}.footer-brand{font-family:'Playfair Display',serif;font-size:20px;color:${C.gold};letter-spacing:3px;margin-bottom:12px;}.wa-float{position:fixed;bottom:28px;right:28px;z-index:900;background:#25D366;color:white;width:60px;height:60px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 20px rgba(37,211,102,0.4);transition:all .3s;border:none;text-decoration:none;}.wa-float:hover{transform:scale(1.1);box-shadow:0 6px 30px rgba(37,211,102,0.5);}`;
 
   return (
-    <div className="min-h-screen bg-neutral-50">
-      {/* HEADER */}
-      <header className="sticky top-0 z-30 border-b bg-white/80 backdrop-blur">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 p-4">
-          <div className="flex items-center gap-2">
-            <Home className="h-6 w-6" />
-            <span className="text-lg font-semibold">{SITE_NAME}</span>
-            <Badge variant="secondary" className="ml-2">MVP</Badge>
-          </div>
+    <div>
+      <style>{css}</style>
+      <nav className="nav"><div className="nav-inner"><div onClick={() => setSection("inicio")} style={{cursor:"pointer"}}><div className="logo-text">MARLO</div><div className="logo-sub">Propiedades</div></div><div className="nav-links">{navItems.map(n => (<button key={n.id} className={`nav-link ${section===n.id?"active":""}`} onClick={() => { setSection(n.id); setMobileMenu(false); }}>{n.label}</button>))}<button className="nav-cta" onClick={scrollToProps}>Ver Propiedades</button></div><button className="mobile-toggle" onClick={() => setMobileMenu(!mobileMenu)}>{mobileMenu ? I.close : I.menu}</button></div></nav>
+      <div className={`mobile-menu ${mobileMenu?"open":""}`}>{navItems.map(n => (<button key={n.id} className="nav-link" onClick={() => { setSection(n.id); setMobileMenu(false); }}>{n.label}</button>))}</div>
 
-          <div className="flex w-full max-w-xl items-center gap-2">
-            <div className="relative w-full">
-              <Search className="pointer-events-none absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2" />
-              <Input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Busca por comuna, ciudad, dirección o título..."
-                className="pl-8"
-              />
-            </div>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="outline" className="gap-2"><Filter className="h-4 w-4" /> Filtros</Button>
-              </PopoverTrigger>
-              <PopoverContent align="end" className="w-96">
-                <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="mb-1 block text-sm font-medium">Operación</label>
-                      <Select value={operacion} onValueChange={setOperacion}>
-                        <SelectTrigger><SelectValue placeholder="Operación" /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="todas">Todas</SelectItem>
-                          <SelectItem value="venta">Venta</SelectItem>
-                          <SelectItem value="arriendo">Arriendo</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-sm font-medium">Tipo</label>
-                      <Select value={tipo} onValueChange={setTipo}>
-                        <SelectTrigger><SelectValue placeholder="Tipo" /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="todos">Todos</SelectItem>
-                          <SelectItem value="casa">Casa</SelectItem>
-                          <SelectItem value="departamento">Departamento</SelectItem>
-                          <SelectItem value="oficina">Oficina</SelectItem>
-                          <SelectItem value="parcela">Parcela</SelectItem>
-                          <SelectItem value="local">Local</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-sm font-medium">Mín. Dormitorios</label>
-                      <Select value={String(minDorms)} onValueChange={(v) => setMinDorms(Number(v))}>
-                        <SelectTrigger><SelectValue placeholder="Dorms" /></SelectTrigger>
-                        <SelectContent>
-                          {[0, 1, 2, 3, 4, 5].map((n) => (
-                            <SelectItem key={n} value={String(n)}>{n === 0 ? "Cualquiera" : n}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-sm font-medium">Orden</label>
-                      <Select value={orden} onValueChange={setOrden}>
-                        <SelectTrigger><SelectValue placeholder="Orden" /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="recientes">Destacados primero</SelectItem>
-                          <SelectItem value="precio-asc">Precio: menor a mayor</SelectItem>
-                          <SelectItem value="precio-desc">Precio: mayor a menor</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
+      {section === "inicio" && (<section className="hero"><div className="hero-bg"/><div className="hero-pattern"/><div className="hero-overlay"/><div className="hero-content"><div className="hero-badge">Corretaje &amp; Gestión Inmobiliaria</div><h1>Encontramos el <span>hogar perfecto</span> para usted</h1><p className="hero-desc">Más de una década conectando familias con su propiedad ideal. Servicio personalizado, transparente y profesional en cada operación.</p><div className="hero-btns"><button className="btn-primary" onClick={scrollToProps}>Explorar Propiedades</button><button className="btn-outline" onClick={() => setSection("contacto")}>Contáctenos</button></div><div className="hero-stats"><div className="stat"><div className="stat-num">250+</div><div className="stat-label">Propiedades</div></div><div className="stat"><div className="stat-num">98%</div><div className="stat-label">Satisfacción</div></div><div className="stat"><div className="stat-num">10+</div><div className="stat-label">Años</div></div></div></div></section>)}
 
-                  <div>
-                    <label className="mb-2 block text-sm font-medium">Rango de precio</label>
-                    <div className="px-2">
-                      <Slider
-                        value={rangoPrecio}
-                        onValueChange={setRangoPrecio}
-                        min={0}
-                        max={preciosMax}
-                        step={50000}
-                      />
-                      <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
-                        <span>Desde {CLP.format(rangoPrecio[0])}</span>
-                        <span>Hasta {CLP.format(rangoPrecio[1])}</span>
-                      </div>
-                    </div>
-                  </div>
+      {(section === "inicio" || section === "nosotros") && (<div className="about-wrap"><section className="section"><div className="about-grid"><div className="about-img"><div className="about-img-inner"/><div className="about-img-overlay"><div className="about-img-text">&ldquo;Donde cada propiedad cuenta una historia&rdquo;</div></div></div><div><div className="section-label">Sobre Nosotros</div><h2 className="section-title">Expertos en el mercado inmobiliario chileno</h2><p className="section-desc">En MARLO Propiedades nos especializamos en corretaje y gestión inmobiliaria con un enfoque personalizado. Nuestro compromiso es entregar un servicio íntegro, transparente y eficiente.</p><div className="about-features"><div className="about-feat"><h4>Experiencia</h4><p>Conocimiento profundo del mercado local y tendencias del sector.</p></div><div className="about-feat"><h4>Confianza</h4><p>Operaciones transparentes con respaldo legal en cada etapa.</p></div><div className="about-feat"><h4>Personalización</h4><p>Atención dedicada a las necesidades específicas de cada cliente.</p></div><div className="about-feat"><h4>Resultados</h4><p>Optimizamos tiempos y valores para lograr la mejor operación.</p></div></div></div></div></section></div>)}
 
-                  <div className="flex items-center gap-2">
-                    <Checkbox id="destacados" checked={soloDestacados} onCheckedChange={(v) => setSoloDestacados(!!v)} />
-                    <label htmlFor="destacados" className="text-sm">Mostrar solo destacados</label>
-                  </div>
-                </div>
-              </PopoverContent>
-            </Popover>
-          </div>
+      {(section === "inicio" || section === "servicios") && (<div className="services-wrap"><section className="section"><div className="section-label" style={{color:C.gold}}>Nuestros Servicios</div><h2 className="section-title" style={{color:C.white}}>Soluciones inmobiliarias integrales</h2><p className="section-desc" style={{color:"rgba(255,255,255,0.5)"}}>Ofrecemos un abanico completo de servicios para propietarios, inversionistas y personas que buscan su próximo hogar.</p><div className="services-grid">{services.map(s => (<div className="service-card" key={s.num}><div className="service-num">{s.num}</div><h3>{s.title}</h3><p>{s.desc}</p></div>))}</div></section></div>)}
 
-          <div className="hidden items-center gap-2 md:flex">
-            <Button variant="ghost" asChild>
-              <a href="#contacto"><Phone className="mr-2 h-4 w-4" /> Contacto</a>
-            </Button>
-            <Button variant="default" asChild>
-              <a href="#publicar">Publicar propiedad</a>
-            </Button>
-          </div>
-        </div>
-      </header>
+      {(section === "inicio" || section === "propiedades") && (<div className="props-wrap" ref={propRef}><section className="section"><div className="section-label">Propiedades</div><h2 className="section-title">Encuentra tu próxima inversión</h2><p className="section-desc">Explora nuestra selección de propiedades disponibles en las mejores ubicaciones.</p><div className="filters"><div className="filter-group">{(["todas","venta","arriendo"] as const).map(v => (<button key={v} className={`filter-btn ${filterOp===v?"active":""}`} onClick={() => setFilterOp(v)}>{v.charAt(0).toUpperCase()+v.slice(1)}</button>))}</div><div className="filter-group">{([["todos","Todos"],["casa","Casas"],["departamento","Deptos"],["oficina","Oficinas"],["parcela","Parcelas"]] as const).map(([v,l]) => (<button key={v} className={`filter-btn ${filterType===v?"active":""}`} onClick={() => setFilterType(v)}>{l}</button>))}</div><div className="search-box">{I.search}<input placeholder="Buscar por comuna o título..." value={searchText} onChange={e => setSearchText(e.target.value)} /></div></div><div className="props-grid">{filtered.map(p => { const imgs = p.imagenes.split(";"); return (<div className="prop-card" key={p.id} onClick={() => openProp(p)}><div className="prop-img"><img src={imgs[0]} alt={p.titulo} loading="lazy" /><div className={`prop-badge ${p.operacion}`}>{p.operacion}</div>{p.destacado && <div className="prop-dest">{I.star} Destacado</div>}</div><div className="prop-body"><div className="prop-price">{formatCLP(p.precio)}{p.operacion==="arriendo"?"/mes":""}</div><div className="prop-title">{p.titulo}</div><div className="prop-loc">{I.pin} {p.comuna}, {p.ciudad}</div><div className="prop-specs">{p.dormitorios > 0 && <div className="prop-spec">{I.bed} {p.dormitorios}</div>}{p.banos > 0 && <div className="prop-spec">{I.bath} {p.banos}</div>}<div className="prop-spec">{I.area} {p.metros} m²</div>{p.estacionamientos > 0 && <div className="prop-spec">{I.car} {p.estacionamientos}</div>}</div></div></div>); })}</div>{filtered.length === 0 && (<div style={{textAlign:"center",padding:"60px 0",color:C.warmGray}}><p style={{fontSize:18}}>No se encontraron propiedades con estos filtros.</p></div>)}</section></div>)}
 
-      {/* HERO */}
-      <section className="border-b bg-white">
-        <div className="mx-auto grid max-w-7xl grid-cols-1 gap-6 p-4 md:grid-cols-3 md:gap-8 md:p-8">
-          <div className="col-span-2 space-y-3">
-            <h1 className="text-2xl font-bold md:text-3xl">Encuentra tu próximo hogar o publica el tuyo</h1>
-            <p className="text-muted-foreground">
-              Filtra por operación, tipo de propiedad, dormitorios y precio. Se cargan propiedades desde Google Sheets y desde tu panel /admin.
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {["Casa", "Departamento", "Oficina", "Parcela", "Local"].map((chip) => (
-                <Badge key={chip} variant="outline" className="cursor-pointer" onClick={() => setTipo(chip.toLowerCase())}>{chip}</Badge>
-              ))}
-              <Badge variant="secondary" className="cursor-pointer" onClick={() => setTipo("todos")}>
-                Todos
-              </Badge>
-            </div>
-          </div>
-          <div className="rounded-2xl border p-4">
-            <div className="flex items-start gap-3">
-              <ImageIcon className="mt-1 h-5 w-5" />
-              <div className="space-y-1 text-sm">
-                <p className="font-medium">¿Sin fotos profesionales?</p>
-                <p className="text-muted-foreground">Sube imágenes nítidas en horizontal (1600px+). Mantén buena luz y orden. Elige una fachada/ambiente como portada.</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
+      {(section === "inicio" || section === "contacto") && (<div className="contact-wrap"><section className="section"><div className="section-label" style={{color:C.gold}}>Contacto</div><h2 className="section-title" style={{color:C.white,marginBottom:48}}>Conversemos sobre su próximo paso</h2><div className="contact-grid"><div className="contact-info"><h3>Oficina Central</h3><div className="contact-item">{I.pin} <span>Santiago, Chile</span></div><h3>Teléfonos</h3><div className="contact-item">{I.phone} <a href="tel:+56971087515" style={{color:"inherit",textDecoration:"none"}}>+56 9 7108 7515</a></div><div className="contact-item">{I.phone} <a href="tel:+56971087513" style={{color:"inherit",textDecoration:"none"}}>+56 9 7108 7513</a></div><h3>Correos Electrónicos</h3><div className="contact-item">{I.mail} <span>contacto@marlopropiedades.cl</span></div><div className="contact-item">{I.mail} <span>arriendo@marlopropiedades.cl</span></div><h3>Horario de Atención</h3><div className="contact-item" style={{display:"block",lineHeight:1.8}}>Lunes a Viernes: 09:00 – 18:00<br/>Sábado: 10:00 – 14:00</div></div><div className="contact-form"><input placeholder="Nombre completo" /><input placeholder="Correo electrónico" /><input placeholder="Teléfono" /><textarea placeholder="Cuéntenos qué está buscando..." /><button>Enviar Mensaje</button></div></div></section></div>)}
 
-      {/* LISTADO */}
-      <main className="mx-auto max-w-7xl p-4 md:p-8">
-        <div className="mb-4 flex items-center justify-between">
-          <p className="text-sm text-muted-foreground">
-            {resultados.length} resultado{resultados.length !== 1 ? "s" : ""}
-          </p>
-          <div className="flex items-center gap-2">
-            <Select value={orden} onValueChange={setOrden}>
-              <SelectTrigger className="w-[220px]"><SelectValue placeholder="Ordenar" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="recientes">Destacados primero</SelectItem>
-                <SelectItem value="precio-asc">Precio: menor a mayor</SelectItem>
-                <SelectItem value="precio-desc">Precio: mayor a menor</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
+      <footer className="footer"><div className="footer-brand">MARLO</div><p>© {new Date().getFullYear()} MARLO Propiedades · Corretaje &amp; Gestión Inmobiliaria · Todos los derechos reservados</p></footer>
 
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {resultados.map((p) => (
-            <Card key={p.id} className="overflow-hidden rounded-2xl">
-              <div className="relative h-48 w-full bg-neutral-100">
-                {p.imagenes?.[0] ? (
-                  <img src={p.imagenes[0]} alt={p.titulo} className="h-full w-full object-cover" />
-                ) : (
-                  <div className="flex h-full w-full items-center justify-center text-neutral-400">
-                    <ImageIcon />
-                  </div>
-                )}
-                <div className="absolute left-3 top-3 flex gap-2">
-                  <Badge>{capitalize(p.operacion)}</Badge>
-                  {p.destacado && <Badge variant="destructive">Destacado</Badge>}
-                </div>
-              </div>
-              <CardHeader className="space-y-2">
-                <CardTitle className="line-clamp-1">{p.titulo}</CardTitle>
-                <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                  <MapPin className="h-4 w-4" /> {p.comuna}
-                  {p.ciudad ? `, ${p.ciudad}` : ""}
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="flex items-center gap-4 text-sm">
-                  <div className="flex items-center gap-1"><BedDouble className="h-4 w-4" /> {p.dormitorios}D</div>
-                  <div className="flex items-center gap-1"><Bath className="h-4 w-4" /> {p.banos}B</div>
-                  <div className="flex items-center gap-1"><Ruler className="h-4 w-4" /> {p.metrosUtiles} m² útiles</div>
-                  {p.estacionamientos ? (
-                    <div className="flex items-center gap-1"><Building2 className="h-4 w-4" /> {p.estacionamientos} Estac.</div>
-                  ) : null}
-                </div>
-                <div className="flex items-baseline gap-2">
-                  <span className="text-lg font-semibold">{CLP.format(p.precio || 0)}</span>
-                  {p.operacion === "arriendo" && p.gastosComunes ? (
-                    <span className="text-xs text-muted-foreground">+ GGCC {CLP.format(p.gastosComunes)}</span>
-                  ) : null}
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {p.etiquetas?.slice(0, 3).map((tag: string) => (
-                    <Badge key={tag} variant="outline">{tag}</Badge>
-                  ))}
-                </div>
-              </CardContent>
-              <CardFooter className="flex items-center justify-between">
-                <Button variant="secondary" onClick={() => { setSelected(p); setOpen(true); }}>Ver detalles</Button>
-                <div className="flex items-center gap-2">
-                  <Button variant="outline" asChild>
-                    <a
-                      href={`https://wa.me/56${String(p.contacto?.telefono || "")
-                        .replace(/\D/g, "")
-                        .slice(-8)}?text=${encodeURIComponent(`Hola, vi la propiedad ${p.titulo} (${p.comuna}). ¿Sigue disponible?`)}`}
-                      target="_blank" rel="noreferrer"
-                    >
-                      <MessageSquare className="mr-2 h-4 w-4" /> WhatsApp
-                    </a>
-                  </Button>
-                  <Button variant="ghost"><Heart className="h-5 w-5" /></Button>
-                </div>
-              </CardFooter>
-            </Card>
-          ))}
-        </div>
-      </main>
+      {selectedProp && (() => { const p = selectedProp; const imgs = p.imagenes.split(";"); const tags = p.etiquetas ? p.etiquetas.split(";") : []; return (<div className="modal-overlay" onClick={closeProp}><div className="modal" onClick={e => e.stopPropagation()}><button className="modal-close" onClick={closeProp}>{I.close}</button><div className="modal-gallery"><img src={imgs[imgIdx]} alt={p.titulo} />{imgs.length > 1 && (<><button className="modal-nav left" onClick={() => setImgIdx((imgIdx-1+imgs.length)%imgs.length)}>{I.chevL}</button><button className="modal-nav right" onClick={() => setImgIdx((imgIdx+1)%imgs.length)}>{I.chevR}</button><div className="modal-dots">{imgs.map((_,i) => <button key={i} className={`modal-dot ${i===imgIdx?"active":""}`} onClick={() => setImgIdx(i)} />)}</div></>)}</div><div className="modal-body"><div className={`prop-badge ${p.operacion}`}>{p.operacion}</div><h2>{p.titulo}</h2><div className="loc">{I.pin} {p.direccion}, {p.comuna}, {p.ciudad}</div><div className="modal-price-row"><div className="modal-price">{formatFullCLP(p.precio)}{p.operacion==="arriendo"?"/mes":""}</div>{p.gastos_comunes > 0 && <div className="modal-gc">+ GG.CC. {formatFullCLP(p.gastos_comunes)}</div>}</div><div className="modal-specs">{p.dormitorios > 0 && <div className="modal-spec"><div className="modal-spec-val">{p.dormitorios}</div><div className="modal-spec-label">Dormitorios</div></div>}{p.banos > 0 && <div className="modal-spec"><div className="modal-spec-val">{p.banos}</div><div className="modal-spec-label">Baños</div></div>}<div className="modal-spec"><div className="modal-spec-val">{p.metros}</div><div className="modal-spec-label">m² útiles</div></div><div className="modal-spec"><div className="modal-spec-val">{p.estacionamientos}</div><div className="modal-spec-label">Estac.</div></div><div className="modal-spec"><div className="modal-spec-val">{p.bodega}</div><div className="modal-spec-label">Bodega</div></div></div><p className="modal-desc">{p.descripcion}</p>{tags.length > 0 && (<div className="modal-tags">{tags.map((t,i) => <span className="modal-tag" key={i}>{t}</span>)}</div>)}<div className="modal-contact"><a className="modal-wa" href={`https://wa.me/56971087515?text=Hola, me interesa la propiedad: ${p.titulo}`} target="_blank" rel="noopener noreferrer">{I.wa} WhatsApp</a><a className="modal-call" href="tel:+56971087515">{I.phone} Llamar</a></div></div></div></div>); })()}
 
-      {/* MODAL DETALLE */}
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-3xl">
-          {selected && (
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-5">
-              <div className="md:col-span-3">
-                <div className="aspect-video w-full overflow-hidden rounded-xl bg-neutral-100">
-                  {selected.imagenes?.[0] ? (
-                    <img src={selected.imagenes[0]} alt={selected.titulo} className="h-full w-full object-cover" />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center text-neutral-400">
-                      <ImageIcon />
-                    </div>
-                  )}
-                </div>
-                <div className="mt-3 grid grid-cols-4 gap-2">
-                  {selected.imagenes?.slice(1, 5).map((src: string, i: number) => (
-                    <img key={i} src={src} alt="thumb" className="h-20 w-full rounded-lg object-cover" />
-                  ))}
-                </div>
-              </div>
-              <div className="space-y-3 md:col-span-2">
-                <DialogHeader>
-                  <DialogTitle className="text-xl">{selected.titulo}</DialogTitle>
-                </DialogHeader>
-                <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                  <MapPin className="h-4 w-4" /> {selected.direccion}
-                  {selected.comuna ? `, ${selected.comuna}` : ""}
-                  {selected.ciudad ? `, ${selected.ciudad}` : ""}
-                </div>
-                <div className="flex items-baseline gap-2">
-                  <span className="text-2xl font-bold">{CLP.format(selected.precio || 0)}</span>
-                  {selected.operacion === "arriendo" && selected.gastosComunes ? (
-                    <span className="text-xs text-muted-foreground">+ GGCC {CLP.format(selected.gastosComunes)}</span>
-                  ) : null}
-                </div>
-
-                <div className="grid grid-cols-2 gap-2 text-sm">
-                  <div className="flex items-center gap-1"><BedDouble className="h-4 w-4" /> {selected.dormitorios} dormitorios</div>
-                  <div className="flex items-center gap-1"><Bath className="h-4 w-4" /> {selected.banos} baños</div>
-                  <div className="flex items-center gap-1"><Ruler className="h-4 w-4" /> {selected.metrosUtiles} m² útiles</div>
-                  <div className="flex items-center gap-1"><Ruler className="h-4 w-4" /> {selected.metrosTotales} m² totales</div>
-                  {selected.estacionamientos ? (
-                    <div className="flex items-center gap-1"><Building2 className="h-4 w-4" /> {selected.estacionamientos} estacionamientos</div>
-                  ) : null}
-                  {selected.bodega ? (
-                    <div className="flex items-center gap-1"><Building2 className="h-4 w-4" /> {selected.bodega} bodega(s)</div>
-                  ) : null}
-                </div>
-
-                <p className="text-sm text-muted-foreground">{selected.descripcion}</p>
-
-                <div className="flex flex-wrap gap-2">
-                  {selected.etiquetas?.map((tag: string) => (
-                    <Badge key={tag} variant="outline">{tag}</Badge>
-                  ))}
-                </div>
-
-                <div className="rounded-xl border p-3">
-                  <p className="text-sm font-medium">Contacto</p>
-                  <div className="mt-2 grid grid-cols-1 gap-2 text-sm md:grid-cols-2">
-                    <a className="flex items-center gap-2" href={`tel:${selected.contacto?.telefono || ""}`}>
-                      <Phone className="h-4 w-4" /> {selected.contacto?.nombre || "Contacto"}
-                    </a>
-                    <a className="flex items-center gap-2" href={`mailto:${selected.contacto?.email || ""}`}>
-                      <Mail className="h-4 w-4" /> {selected.contacto?.email || "—"}
-                    </a>
-                  </div>
-                  <div className="mt-2">
-                    <Button asChild className="w-full">
-                      <a
-                        target="_blank"
-                        rel="noreferrer"
-                        href={`https://wa.me/56${String(selected.contacto?.telefono || "")
-                          .replace(/\D/g, "")
-                          .slice(-8)}?text=${encodeURIComponent(
-                            `Hola, vi la propiedad ${selected.titulo} (${selected.comuna}). ¿Sigue disponible?`
-                          )}`}
-                      >
-                        <MessageSquare className="mr-2 h-4 w-4" /> Escribir por WhatsApp
-                      </a>
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      {/* CTA PUBLICAR */}
-      <section id="publicar" className="border-t bg-white">
-        <div className="mx-auto grid max-w-7xl grid-cols-1 items-center gap-6 p-4 md:grid-cols-2 md:p-8">
-          <div className="space-y-3">
-            <h2 className="text-xl font-semibold">¿Quieres publicar una propiedad?</h2>
-            <p className="text-muted-foreground">Puedes usar el panel <a className="underline" href="/admin">/admin</a> o el Google Form conectado al Sheet.</p>
-            <ul className="text-sm text-muted-foreground">
-              <li className="flex items-center gap-2"><Check className="h-4 w-4" /> Revisión y curaduría de fotos</li>
-              <li className="flex items-center gap-2"><Check className="h-4 w-4" /> Redacción profesional del aviso</li>
-              <li className="flex items-center gap-2"><Check className="h-4 w-4" /> Difusión en redes y portales</li>
-            </ul>
-          </div>
-          <form onSubmit={(e) => e.preventDefault()} className="grid gap-3 rounded-2xl border p-4">
-            <div className="grid gap-1">
-              <label className="text-sm">Tu nombre</label>
-              <Input placeholder="Nombre y apellido" />
-            </div>
-            <div className="grid gap-1">
-              <label className="text-sm">Correo</label>
-              <Input type="email" placeholder="tu@email.cl" />
-            </div>
-            <div className="grid gap-1">
-              <label className="text-sm">Teléfono</label>
-              <Input placeholder="+56 9 ..." />
-            </div>
-            <div className="grid gap-1">
-              <label className="text-sm">Tipo de propiedad</label>
-              <Select>
-                <SelectTrigger><SelectValue placeholder="Selecciona" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="casa">Casa</SelectItem>
-                  <SelectItem value="departamento">Departamento</SelectItem>
-                  <SelectItem value="oficina">Oficina</SelectItem>
-                  <SelectItem value="parcela">Parcela</SelectItem>
-                  <SelectItem value="local">Local</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid gap-1">
-              <label className="text-sm">Mensaje</label>
-              <Input placeholder="Dirección, m², dormitorios, precio..." />
-            </div>
-            <Button type="submit">Enviar</Button>
-          </form>
-        </div>
-      </section>
-
-      {/* Contacto */}
-      <section id="contacto" className="mt-16 rounded-2xl border bg-white/60 p-6 shadow-sm">
-        <h2 className="text-xl font-semibold mb-3">Contáctanos</h2>
-
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div className="flex items-center gap-3">
-            <span className="inline-block h-9 w-9 rounded-full bg-black/5 grid place-items-center">📞</span>
-            <a href={`tel:+${PHONE_1_RAW}`} className="hover:underline">
-              {PHONE_1_DISPLAY}
-            </a>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <span className="inline-block h-9 w-9 rounded-full bg-black/5 grid place-items-center">📞</span>
-            <a href={`tel:+${PHONE_2_RAW}`} className="hover:underline">
-              {PHONE_2_DISPLAY}
-            </a>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <span className="inline-block h-9 w-9 rounded-full bg-black/5 grid place-items-center">✉️</span>
-            <a href={`mailto:${EMAIL}`} className="hover:underline">
-              {EMAIL}
-            </a>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <span className="inline-block h-9 w-9 rounded-full bg-black/5 grid place-items-center">💬</span>
-            <a
-              href={`https://wa.me/${PHONE_1_RAW}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm hover:bg-black/5"
-            >
-              WhatsApp (principal)
-            </a>
-          </div>
-        </div>
-      </section>
+      <a className="wa-float" href="https://wa.me/56971087515?text=Hola, me interesa conocer sus propiedades disponibles" target="_blank" rel="noopener noreferrer">{I.wa}</a>
     </div>
   );
 }
