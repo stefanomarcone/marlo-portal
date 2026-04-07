@@ -1,365 +1,220 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useState, useEffect } from "react";
+import { supabase } from "../../src/lib/supabase";
 
-// Variables públicas (ponlas en .env.local y reinicia el server)
-const CLOUD = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME!;
-const PRESET = process.env.NEXT_PUBLIC_CLOUDINARY_PRESET!;
+interface Property {
+  id: number; titulo: string; operacion: string; precio: number; tipo: string;
+  dormitorios: number; banos: number; metros: number; comuna: string; ciudad: string;
+  direccion: string; gastos_comunes: number; estacionamientos: number; bodega: string;
+  destacado: boolean; imagenes: string; descripcion: string; etiquetas: string;
+}
 
-type Prop = {
-  id: string;
-  titulo: string;
-  operacion: "venta" | "arriendo";
-  tipo: string;
-  comuna: string;
-  ciudad?: string;
-  direccion?: string;
-  precio: number;
-  gastosComunes?: number;
-  dormitorios: number;
-  banos: number;
-  metrosUtiles: number;
-  metrosTotales: number;
-  estacionamientos?: number;
-  bodega?: number;
-  destacado?: boolean;
-  imagenes: string[];
-  descripcion?: string;
-  etiquetas?: string[];
-  contacto: { nombre: string; telefono: string; email: string };
-};
+const emptyProp = { titulo:"", operacion:"venta", precio:0, tipo:"departamento", dormitorios:0, banos:0, metros:0, comuna:"", ciudad:"Santiago", direccion:"", gastos_comunes:0, estacionamientos:0, bodega:"No", destacado:false, imagenes:"", descripcion:"", etiquetas:"" };
 
 export default function AdminPage() {
-  // mini-auth simple (clave: marlo123)
-  const [ok, setOk] = useState(false);
-  const [clave, setClave] = useState("");
-  useEffect(() => setOk(sessionStorage.getItem("marlo-ok") === "1"), []);
-  if (!ok) {
+  const [user, setUser] = useState<any>(null);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loginError, setLoginError] = useState("");
+  const [properties, setProperties] = useState<Property[]>([]);
+  const [form, setForm] = useState(emptyProp);
+  const [editing, setEditing] = useState<number|null>(null);
+  const [loading, setLoading] = useState(false);
+  const [msg, setMsg] = useState("");
+  const [showForm, setShowForm] = useState(false);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user || null);
+      if (session?.user) loadProperties();
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
+      setUser(session?.user || null);
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const loadProperties = async () => {
+    const { data } = await supabase.from("propiedades").select("*").order("created_at", { ascending: false });
+    if (data) setProperties(data);
+  };
+
+  const handleLogin = async () => {
+    setLoginError("");
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) { setLoginError(error.message); return; }
+    loadProperties();
+  };
+
+  const handleLogout = async () => { await supabase.auth.signOut(); setUser(null); };
+
+  const handleSave = async () => {
+    setLoading(true); setMsg("");
+    if (editing) {
+      const { error } = await supabase.from("propiedades").update(form).eq("id", editing);
+      if (error) { setMsg("Error: " + error.message); } else { setMsg("Propiedad actualizada"); }
+    } else {
+      const { error } = await supabase.from("propiedades").insert([form]);
+      if (error) { setMsg("Error: " + error.message); } else { setMsg("Propiedad agregada"); }
+    }
+    setForm(emptyProp); setEditing(null); setShowForm(false); setLoading(false);
+    loadProperties();
+  };
+
+  const handleDelete = async (id: number) => {
+    if (!confirm("¿Eliminar esta propiedad?")) return;
+    await supabase.from("propiedades").delete().eq("id", id);
+    loadProperties();
+    setMsg("Propiedad eliminada");
+  };
+
+  const handleEdit = (p: Property) => {
+    setForm({ titulo:p.titulo, operacion:p.operacion, precio:p.precio, tipo:p.tipo, dormitorios:p.dormitorios, banos:p.banos, metros:p.metros, comuna:p.comuna, ciudad:p.ciudad, direccion:p.direccion, gastos_comunes:p.gastos_comunes, estacionamientos:p.estacionamientos, bodega:p.bodega, destacado:p.destacado, imagenes:p.imagenes||"", descripcion:p.descripcion||"", etiquetas:p.etiquetas||"" });
+    setEditing(p.id); setShowForm(true);
+    window.scrollTo(0, 0);
+  };
+
+  const formatCLP = (n: number) => `$${n.toLocaleString("es-CL")}`;
+
+  const css = `
+    @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap');
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{font-family:'DM Sans',sans-serif;background:#0f0f0f;color:#e0e0e0;min-height:100vh;}
+    .admin-wrap{max-width:1200px;margin:0 auto;padding:24px;}
+    .admin-header{display:flex;justify-content:space-between;align-items:center;padding:20px 0;border-bottom:1px solid rgba(200,164,90,0.2);margin-bottom:32px;}
+    .admin-logo{font-size:24px;font-weight:700;color:#C8A45A;letter-spacing:3px;}
+    .admin-logo span{font-size:12px;color:#666;letter-spacing:1px;display:block;font-weight:400;}
+    .btn{padding:10px 24px;font-size:13px;font-weight:600;border:none;cursor:pointer;transition:all .3s;font-family:inherit;letter-spacing:1px;text-transform:uppercase;}
+    .btn-gold{background:#C8A45A;color:#1A1A1A;}.btn-gold:hover{background:#E8D5A0;}
+    .btn-red{background:#c15050;color:white;}.btn-red:hover{background:#d06060;}
+    .btn-dark{background:#2D2D2D;color:#C8A45A;border:1px solid rgba(200,164,90,0.3);}.btn-dark:hover{background:#3D3D3D;}
+    .btn-sm{padding:6px 14px;font-size:11px;}
+    .login-box{max-width:400px;margin:120px auto;background:#1A1A1A;padding:48px;border:1px solid rgba(200,164,90,0.2);}
+    .login-box h2{font-size:24px;color:#C8A45A;margin-bottom:8px;letter-spacing:2px;}
+    .login-box p{color:#666;font-size:14px;margin-bottom:32px;}
+    .login-box input{width:100%;padding:14px 18px;background:#0f0f0f;border:1px solid rgba(200,164,90,0.15);color:white;font-size:14px;font-family:inherit;margin-bottom:16px;outline:none;}
+    .login-box input:focus{border-color:#C8A45A;}
+    .error{color:#c15050;font-size:13px;margin-bottom:16px;}
+    .msg{padding:12px 20px;margin-bottom:20px;font-size:14px;background:rgba(200,164,90,0.1);border:1px solid rgba(200,164,90,0.3);color:#C8A45A;}
+    .toolbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;flex-wrap:wrap;gap:12px;}
+    .toolbar h3{font-size:18px;color:#C8A45A;}
+    .form-panel{background:#1A1A1A;padding:32px;border:1px solid rgba(200,164,90,0.2);margin-bottom:32px;}
+    .form-panel h3{font-size:18px;color:#C8A45A;margin-bottom:24px;}
+    .form-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;}
+    @media(max-width:768px){.form-grid{grid-template-columns:1fr;}}
+    .form-group{display:flex;flex-direction:column;gap:6px;}
+    .form-group.full{grid-column:1/-1;}
+    .form-group label{font-size:11px;color:#888;letter-spacing:1px;text-transform:uppercase;}
+    .form-group input,.form-group select,.form-group textarea{padding:10px 14px;background:#0f0f0f;border:1px solid rgba(200,164,90,0.15);color:white;font-size:14px;font-family:inherit;outline:none;}
+    .form-group input:focus,.form-group select:focus,.form-group textarea:focus{border-color:#C8A45A;}
+    .form-group textarea{min-height:80px;resize:vertical;}
+    .form-group select{appearance:auto;}
+    .check-row{display:flex;align-items:center;gap:8px;padding-top:22px;}
+    .check-row input[type="checkbox"]{width:18px;height:18px;accent-color:#C8A45A;}
+    .form-actions{display:flex;gap:12px;margin-top:20px;}
+    .prop-table{width:100%;border-collapse:collapse;}
+    .prop-table th{text-align:left;padding:12px 16px;font-size:11px;color:#888;letter-spacing:1px;text-transform:uppercase;border-bottom:1px solid rgba(200,164,90,0.2);}
+    .prop-table td{padding:12px 16px;font-size:14px;border-bottom:1px solid rgba(255,255,255,0.05);}
+    .prop-table tr:hover{background:rgba(200,164,90,0.05);}
+    .prop-table .thumb{width:60px;height:40px;object-fit:cover;border:1px solid #333;}
+    .badge{padding:3px 10px;font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;}
+    .badge.venta{background:#C8A45A;color:#1A1A1A;}
+    .badge.arriendo{background:#3D6B5E;color:white;}
+    .actions{display:flex;gap:8px;}
+    .back-link{color:#666;font-size:13px;text-decoration:none;}.back-link:hover{color:#C8A45A;}
+  `;
+
+  if (!user) {
     return (
-      <div className="min-h-screen bg-neutral-50 flex items-center justify-center p-6">
-        <div className="w-full max-w-md rounded-2xl border bg-white p-6 shadow-sm">
-          <h1 className="text-2xl font-bold">Admin MARLO</h1>
-          <p className="mt-1 text-sm text-neutral-600">
-            Ingresa la clave temporal <code>marlo123</code>.
-          </p>
-          <input
-            type="password"
-            value={clave}
-            onChange={(e) => setClave(e.target.value)}
-            className="mt-4 w-full rounded-lg border p-2"
-            placeholder="Clave"
-          />
-          <button
-            onClick={() => {
-              if (clave === "marlo123") {
-                sessionStorage.setItem("marlo-ok", "1");
-                setOk(true);
-              } else alert("Clave incorrecta");
-            }}
-            className="mt-3 w-full rounded-lg border bg-black px-4 py-2 text-white"
-          >
-            Entrar
-          </button>
+      <div>
+        <style>{css}</style>
+        <div className="login-box">
+          <h2>MARLO ADMIN</h2>
+          <p>Ingresa con tu cuenta para administrar propiedades</p>
+          {loginError && <div className="error">{loginError}</div>}
+          <input placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} onKeyDown={e => e.key==="Enter" && handleLogin()} />
+          <input type="password" placeholder="Contraseña" value={password} onChange={e => setPassword(e.target.value)} onKeyDown={e => e.key==="Enter" && handleLogin()} />
+          <button className="btn btn-gold" style={{width:"100%"}} onClick={handleLogin}>Iniciar Sesión</button>
+          <div style={{marginTop:24,textAlign:"center"}}><a href="/" className="back-link">← Volver al sitio</a></div>
         </div>
       </div>
     );
   }
 
-  const [files, setFiles] = useState<File[]>([]);
-  const [subiendo, setSubiendo] = useState(false);
-  const [mensaje, setMensaje] = useState<string | null>(null);
-
-  const [f, setF] = useState({
-    titulo: "",
-    operacion: "venta",
-    tipo: "departamento",
-    precio: "",
-    dormitorios: "",
-    banos: "",
-    metros: "",
-    comuna: "",
-    ciudad: "",
-    direccion: "",
-    destacado: false,
-    descripcion: "",
-    telefono: "9 6105 0539",
-    email: "contacto@marlo.cl",
-  });
-
-  const puedeGuardar = useMemo(
-    () =>
-      f.titulo.trim().length > 0 &&
-      Number(f.precio) >= 0 &&
-      Number(f.dormitorios) >= 0 &&
-      Number(f.banos) >= 0 &&
-      Number(f.metros) >= 0 &&
-      f.comuna.trim().length > 0,
-    [f]
-  );
-
-  async function uploadAll(): Promise<string[]> {
-    const urls: string[] = [];
-    for (const file of files) {
-      const fd = new FormData();
-      fd.append("file", file);
-      fd.append("upload_preset", PRESET);
-      const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD}/image/upload`, {
-        method: "POST",
-        body: fd,
-      });
-      const json = await res.json();
-      if (json.secure_url) urls.push(json.secure_url as string);
-    }
-    return urls;
-  }
-
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setMensaje(null);
-
-    if (!CLOUD || !PRESET) {
-      alert("Faltan NEXT_PUBLIC_CLOUDINARY_* en .env.local");
-      return;
-    }
-    try {
-      setSubiendo(true);
-      const imagenes = await uploadAll();
-      const metros = Number(f.metros || 0);
-
-      const nuevo: Prop = {
-        id: "local-" + Date.now(),
-        titulo: f.titulo,
-        operacion: (f.operacion as any) || "venta",
-        tipo: f.tipo || "departamento",
-        comuna: f.comuna,
-        ciudad: f.ciudad || "",
-        direccion: f.direccion || "",
-        precio: Number(f.precio || 0),
-        gastosComunes: 0,
-        dormitorios: Number(f.dormitorios || 0),
-        banos: Number(f.banos || 0),
-        metrosUtiles: metros,
-        metrosTotales: metros,
-        estacionamientos: 0,
-        bodega: 0,
-        destacado: !!f.destacado,
-        imagenes,
-        descripcion: f.descripcion || "",
-        etiquetas: [],
-        contacto: { nombre: "MARLO", telefono: f.telefono, email: f.email },
-      };
-
-      const key = "marlo-props";
-      const prev = JSON.parse(localStorage.getItem(key) || "[]");
-      prev.unshift(nuevo);
-      localStorage.setItem(key, JSON.stringify(prev));
-
-      setMensaje("Propiedad guardada ✔. Ya aparece en la Home.");
-      setFiles([]);
-      setF({
-        titulo: "",
-        operacion: "venta",
-        tipo: "departamento",
-        precio: "",
-        dormitorios: "",
-        banos: "",
-        metros: "",
-        comuna: "",
-        ciudad: "",
-        direccion: "",
-        destacado: false,
-        descripcion: "",
-        telefono: "9 6105 0539",
-        email: "contacto@marlo.cl",
-      });
-    } catch (err) {
-      console.error(err);
-      alert("Hubo un problema subiendo/guardando.");
-    } finally {
-      setSubiendo(false);
-    }
-  }
-
   return (
-    <div className="min-h-screen bg-neutral-50">
-      <header className="border-b bg-white">
-        <div className="mx-auto flex max-w-5xl items-center justify-between p-4">
-          <h1 className="text-xl font-bold">Admin MARLO</h1>
-          <a href="/" className="text-sm underline">
-            Volver a la Home
-          </a>
-        </div>
-      </header>
-
-      <main className="mx-auto max-w-5xl p-4">
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-          {/* Formulario */}
-          <form onSubmit={onSubmit} className="lg:col-span-2 rounded-2xl border bg-white p-4 shadow-sm">
-            <h2 className="text-lg font-semibold">Nueva propiedad</h2>
-            <p className="mb-4 text-sm text-neutral-600">Las fotos se suben a Cloudinary automáticamente.</p>
-
-            <div className="grid grid-cols-2 gap-3">
-              <input
-                className="col-span-2 rounded-lg border p-2"
-                placeholder="Título"
-                value={f.titulo}
-                onChange={(e) => setF({ ...f, titulo: e.target.value })}
-                required
-              />
-              <select
-                className="rounded-lg border p-2"
-                value={f.operacion}
-                onChange={(e) => setF({ ...f, operacion: e.target.value })}
-              >
-                <option value="venta">Venta</option>
-                <option value="arriendo">Arriendo</option>
-              </select>
-              <select className="rounded-lg border p-2" value={f.tipo} onChange={(e) => setF({ ...f, tipo: e.target.value })}>
-                <option value="departamento">Departamento</option>
-                <option value="casa">Casa</option>
-                <option value="oficina">Oficina</option>
-                <option value="parcela">Parcela</option>
-                <option value="local">Local</option>
-              </select>
-              <input
-                className="rounded-lg border p-2"
-                placeholder="Precio (CLP)"
-                value={f.precio}
-                onChange={(e) => setF({ ...f, precio: e.target.value })}
-              />
-              <input
-                className="rounded-lg border p-2"
-                placeholder="Dormitorios"
-                value={f.dormitorios}
-                onChange={(e) => setF({ ...f, dormitorios: e.target.value })}
-              />
-              <input
-                className="rounded-lg border p-2"
-                placeholder="Baños"
-                value={f.banos}
-                onChange={(e) => setF({ ...f, banos: e.target.value })}
-              />
-              <input
-                className="rounded-lg border p-2"
-                placeholder="Metros"
-                value={f.metros}
-                onChange={(e) => setF({ ...f, metros: e.target.value })}
-              />
-              <input
-                className="rounded-lg border p-2"
-                placeholder="Comuna"
-                value={f.comuna}
-                onChange={(e) => setF({ ...f, comuna: e.target.value })}
-              />
-              <input
-                className="rounded-lg border p-2"
-                placeholder="Ciudad"
-                value={f.ciudad}
-                onChange={(e) => setF({ ...f, ciudad: e.target.value })}
-              />
-              <input
-                className="col-span-2 rounded-lg border p-2"
-                placeholder="Dirección"
-                value={f.direccion}
-                onChange={(e) => setF({ ...f, direccion: e.target.value })}
-              />
-              <textarea
-                className="col-span-2 rounded-lg border p-2"
-                rows={3}
-                placeholder="Descripción"
-                value={f.descripcion}
-                onChange={(e) => setF({ ...f, descripcion: e.target.value })}
-              />
-
-              <label className="col-span-2 mt-2 block text-sm font-medium">Fotos (puedes seleccionar varias)</label>
-              <input
-                className="col-span-2"
-                type="file"
-                multiple
-                accept="image/*"
-                onChange={(e) => setFiles(Array.from(e.target.files || []))}
-              />
-              {files.length > 0 && (
-                <div className="col-span-2 grid grid-cols-4 gap-2">
-                  {files.map((f, i) => (
-                    <img key={i} src={URL.createObjectURL(f)} className="h-20 w-full rounded-lg object-cover" />
-                  ))}
-                </div>
-              )}
-
-              <label className="mt-2 flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={f.destacado}
-                  onChange={(e) => setF({ ...f, destacado: e.target.checked })}
-                />
-                Marcar como destacado
-              </label>
-
-              <div className="col-span-2 mt-2 grid grid-cols-2 gap-3">
-                <input
-                  className="rounded-lg border p-2"
-                  placeholder="Teléfono contacto"
-                  value={f.telefono}
-                  onChange={(e) => setF({ ...f, telefono: e.target.value })}
-                />
-                <input
-                  className="rounded-lg border p-2"
-                  placeholder="Email contacto"
-                  value={f.email}
-                  onChange={(e) => setF({ ...f, email: e.target.value })}
-                />
-              </div>
-
-              <button
-                disabled={!puedeGuardar || subiendo}
-                className="col-span-2 mt-2 rounded-lg bg.black px-4 py-2 text-white"
-                style={{ background: "black" }}
-              >
-                {subiendo ? "Subiendo..." : "Guardar propiedad"}
-              </button>
-              {mensaje && <p className="col-span-2 text-sm text-green-600">{mensaje}</p>}
-            </div>
-          </form>
-
-          {/* Lista local */}
-          <div className="rounded-2xl border bg-white p-4 shadow-sm">
-            <h3 className="text-base font-semibold">Propiedades locales</h3>
-            <PropList />
+    <div>
+      <style>{css}</style>
+      <div className="admin-wrap">
+        <div className="admin-header">
+          <div className="admin-logo">MARLO<span>Panel de Administración</span></div>
+          <div style={{display:"flex",gap:16,alignItems:"center"}}>
+            <a href="/" className="back-link">← Sitio web</a>
+            <span style={{color:"#666",fontSize:13}}>{user.email}</span>
+            <button className="btn btn-dark btn-sm" onClick={handleLogout}>Salir</button>
           </div>
         </div>
-      </main>
-    </div>
-  );
-}
 
-function PropList() {
-  const [items, setItems] = useState<Prop[]>([]);
-  useEffect(() => {
-    try {
-      setItems(JSON.parse(localStorage.getItem("marlo-props") || "[]"));
-    } catch {}
-  }, []);
+        {msg && <div className="msg">{msg}</div>}
 
-  function borrar(id: string) {
-    const next = items.filter((x) => x.id !== id);
-    setItems(next);
-    localStorage.setItem("marlo-props", JSON.stringify(next));
-  }
-
-  if (!items.length) return <p className="mt-2 text-sm text-neutral-600">Aún no hay propiedades guardadas aquí.</p>;
-
-  return (
-    <ul className="mt-3 space-y-2">
-      {items.map((p) => (
-        <li key={p.id} className="flex items-center justify-between rounded-lg border p-3">
-          <span className="truncate text-sm">
-            {p.titulo} — {p.operacion} — ${p.precio.toLocaleString()}
-          </span>
-          <button onClick={() => borrar(p.id)} className="text-sm text-red-600">
-            Eliminar
+        <div className="toolbar">
+          <h3>{properties.length} Propiedades</h3>
+          <button className="btn btn-gold" onClick={() => { setShowForm(!showForm); setForm(emptyProp); setEditing(null); }}>
+            {showForm ? "Cancelar" : "+ Nueva Propiedad"}
           </button>
-        </li>
-      ))}
-    </ul>
+        </div>
+
+        {showForm && (
+          <div className="form-panel">
+            <h3>{editing ? "Editar Propiedad" : "Nueva Propiedad"}</h3>
+            <div className="form-grid">
+              <div className="form-group full"><label>Título</label><input value={form.titulo} onChange={e => setForm({...form, titulo: e.target.value})} placeholder="Ej: Departamento en Las Condes" /></div>
+              <div className="form-group"><label>Operación</label><select value={form.operacion} onChange={e => setForm({...form, operacion: e.target.value})}><option value="venta">Venta</option><option value="arriendo">Arriendo</option></select></div>
+              <div className="form-group"><label>Precio (CLP)</label><input type="number" value={form.precio} onChange={e => setForm({...form, precio: parseInt(e.target.value)||0})} /></div>
+              <div className="form-group"><label>Tipo</label><select value={form.tipo} onChange={e => setForm({...form, tipo: e.target.value})}><option value="departamento">Departamento</option><option value="casa">Casa</option><option value="oficina">Oficina</option><option value="parcela">Parcela</option><option value="terreno">Terreno</option><option value="local">Local Comercial</option></select></div>
+              <div className="form-group"><label>Dormitorios</label><input type="number" value={form.dormitorios} onChange={e => setForm({...form, dormitorios: parseInt(e.target.value)||0})} /></div>
+              <div className="form-group"><label>Baños</label><input type="number" value={form.banos} onChange={e => setForm({...form, banos: parseInt(e.target.value)||0})} /></div>
+              <div className="form-group"><label>Metros²</label><input type="number" value={form.metros} onChange={e => setForm({...form, metros: parseInt(e.target.value)||0})} /></div>
+              <div className="form-group"><label>Comuna</label><input value={form.comuna} onChange={e => setForm({...form, comuna: e.target.value})} placeholder="Ej: Las Condes" /></div>
+              <div className="form-group"><label>Ciudad</label><input value={form.ciudad} onChange={e => setForm({...form, ciudad: e.target.value})} /></div>
+              <div className="form-group full"><label>Dirección</label><input value={form.direccion} onChange={e => setForm({...form, direccion: e.target.value})} placeholder="Ej: Av. Apoquindo 4500" /></div>
+              <div className="form-group"><label>Gastos Comunes</label><input type="number" value={form.gastos_comunes} onChange={e => setForm({...form, gastos_comunes: parseInt(e.target.value)||0})} /></div>
+              <div className="form-group"><label>Estacionamientos</label><input type="number" value={form.estacionamientos} onChange={e => setForm({...form, estacionamientos: parseInt(e.target.value)||0})} /></div>
+              <div className="form-group"><label>Bodega</label><select value={form.bodega} onChange={e => setForm({...form, bodega: e.target.value})}><option value="No">No</option><option value="Sí">Sí</option></select></div>
+              <div className="form-group full"><label>URLs de Imágenes (separadas por ;)</label><input value={form.imagenes} onChange={e => setForm({...form, imagenes: e.target.value})} placeholder="https://imagen1.jpg;https://imagen2.jpg" /></div>
+              <div className="form-group full"><label>Descripción</label><textarea value={form.descripcion} onChange={e => setForm({...form, descripcion: e.target.value})} placeholder="Descripción detallada de la propiedad..." /></div>
+              <div className="form-group"><label>Etiquetas (separadas por ;)</label><input value={form.etiquetas} onChange={e => setForm({...form, etiquetas: e.target.value})} placeholder="piscina;gimnasio;vista" /></div>
+              <div className="check-row"><input type="checkbox" checked={form.destacado} onChange={e => setForm({...form, destacado: e.target.checked})} /><label style={{color:"#C8A45A",fontSize:13}}>Propiedad Destacada</label></div>
+            </div>
+            <div className="form-actions">
+              <button className="btn btn-gold" onClick={handleSave} disabled={loading || !form.titulo}>{loading ? "Guardando..." : editing ? "Actualizar" : "Agregar Propiedad"}</button>
+              <button className="btn btn-dark" onClick={() => { setShowForm(false); setForm(emptyProp); setEditing(null); }}>Cancelar</button>
+            </div>
+          </div>
+        )}
+
+        <div style={{overflowX:"auto"}}>
+          <table className="prop-table">
+            <thead><tr><th>Foto</th><th>Título</th><th>Operación</th><th>Precio</th><th>Tipo</th><th>Comuna</th><th>Acciones</th></tr></thead>
+            <tbody>
+              {properties.map(p => {
+                const img = (p.imagenes||"").split(";")[0];
+                return (
+                  <tr key={p.id}>
+                    <td>{img ? <img className="thumb" src={img} alt="" /> : <div className="thumb" style={{background:"#222"}} />}</td>
+                    <td style={{fontWeight:500}}>{p.titulo}{p.destacado && <span style={{color:"#C8A45A",marginLeft:8,fontSize:10}}>★</span>}</td>
+                    <td><span className={`badge ${p.operacion}`}>{p.operacion}</span></td>
+                    <td>{formatCLP(p.precio)}</td>
+                    <td style={{textTransform:"capitalize"}}>{p.tipo}</td>
+                    <td>{p.comuna}</td>
+                    <td><div className="actions"><button className="btn btn-dark btn-sm" onClick={() => handleEdit(p)}>Editar</button><button className="btn btn-red btn-sm" onClick={() => handleDelete(p.id)}>Eliminar</button></div></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        {properties.length === 0 && <div style={{textAlign:"center",padding:60,color:"#666"}}>No hay propiedades. Agrega la primera.</div>}
+      </div>
+    </div>
   );
 }
