@@ -1,97 +1,776 @@
 "use client";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { supabase } from "../lib/supabase";
 
 interface Property {
-  id: number; titulo: string; operacion: string; precio: number; tipo: string;
-  dormitorios: number; banos: number; metros: number; comuna: string; ciudad: string;
-  direccion: string; gastos_comunes: number; estacionamientos: number; bodega: string;
-  destacado: boolean; imagenes: string; descripcion: string; etiquetas: string;
+  id: number;
+  titulo: string;
+  operacion: string;
+  precio: number;
+  tipo: string;
+  dormitorios: number;
+  banos: number;
+  metros: number;
+  comuna: string;
+  ciudad: string;
+  direccion: string;
+  gastos_comunes: number;
+  estacionamientos: number;
+  bodega: boolean | string;
+  destacado: boolean;
+  imagenes: string;
+  descripcion: string;
+  etiquetas: string;
 }
 
-const formatCLP = (n: number) => { if(n>=1000000) return `$${(n/1000000).toFixed(0)} M`; if(n>=1000) return `$${(n/1000).toFixed(0)} mil`; return `$${n.toLocaleString("es-CL")}`; };
-const formatFullCLP = (n: number) => `$${n.toLocaleString("es-CL")}`;
+const fmtCLP = (n: number) => {
+  if (!n && n !== 0) return "—";
+  return "$" + n.toLocaleString("es-CL").replace(/,/g, ".");
+};
+const fmtUF = (clp: number) => {
+  const uf = clp / 38500;
+  return uf.toLocaleString("es-CL", { maximumFractionDigits: 0 }) + " UF";
+};
+const fmtN = (n: number) => n.toLocaleString("es-CL").replace(/,/g, ".");
 
-const I = {
-  bed:<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 7v11"/><path d="M21 7v11"/><path d="M3 18h18"/><path d="M3 11h18"/><path d="M3 7h18v4H3z"/><rect x="5" y="7" width="4" height="4" rx="1"/></svg>,
-  bath:<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 12h16a1 1 0 011 1v3a4 4 0 01-4 4H7a4 4 0 01-4-4v-3a1 1 0 011-1z"/><path d="M6 12V5a2 2 0 012-2h3v2.25"/></svg>,
-  area:<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 3v18"/></svg>,
-  car:<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 17h14v-5l-2-6H7L5 12z"/><circle cx="7.5" cy="17.5" r="1.5"/><circle cx="16.5" cy="17.5" r="1.5"/></svg>,
-  phone:<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6A19.79 19.79 0 012.12 4.18 2 2 0 014.11 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg>,
-  mail:<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 7l-10 7L2 7"/></svg>,
-  wa:<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>,
-  close:<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>,
-  chevL:<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M15 18l-6-6 6-6"/></svg>,
-  chevR:<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M9 18l6-6-6-6"/></svg>,
-  pin:<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>,
-  search:<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>,
-  star:<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26"/></svg>,
-  menu:<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>,
+const TIPO_LABEL: Record<string, string> = {
+  departamento: "Departamento",
+  casa: "Casa",
+  oficina: "Oficina",
+  parcela: "Parcela",
+  terreno: "Terreno",
+  local: "Local comercial",
 };
 
-const C = { gold:"#C8A45A", goldLight:"#E8D5A0", dark:"#1A1A1A", darkAlt:"#242424", charcoal:"#2D2D2D", warmGray:"#8C8579", cream:"#FAF8F4", white:"#FFFFFF", accent:"#3D6B5E" };
+/* ---- SVG Icons ---- */
+const IcBed = ({ s = 14 }: { s?: number }) => (
+  <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+    <path d="M3 18v-7a3 3 0 013-3h12a3 3 0 013 3v7" /><path d="M3 14h18M3 18v3M21 18v3" />
+    <rect x="7" y="10" width="4" height="3" rx="1" /><rect x="13" y="10" width="4" height="3" rx="1" />
+  </svg>
+);
+const IcBath = ({ s = 14 }: { s?: number }) => (
+  <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+    <path d="M4 12h16v3a4 4 0 01-4 4H8a4 4 0 01-4-4v-3z" /><path d="M6 12V6a2 2 0 012-2h2a2 2 0 012 2v1" /><path d="M6 19v2M18 19v2" />
+  </svg>
+);
+const IcSqm = ({ s = 14 }: { s?: number }) => (
+  <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+    <rect x="4" y="4" width="16" height="16" /><path d="M4 9h2M4 14h2M9 4v2M14 4v2" />
+  </svg>
+);
+const IcCar = ({ s = 14 }: { s?: number }) => (
+  <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+    <path d="M5 17V9l2-4h10l2 4v8" /><path d="M5 17h14M3 17h2M19 17h2" />
+    <circle cx="8" cy="17" r="1.5" /><circle cx="16" cy="17" r="1.5" />
+  </svg>
+);
+const IcArrow = ({ s = 16, left }: { s?: number; left?: boolean }) => (
+  <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"
+    style={{ transform: left ? "rotate(180deg)" : undefined }}>
+    <path d="M5 12h14M13 6l6 6-6 6" />
+  </svg>
+);
+const IcHeart = ({ s = 16, filled }: { s?: number; filled?: boolean }) => (
+  <svg width={s} height={s} viewBox="0 0 24 24" fill={filled ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.5">
+    <path d="M12 20s-7-4.35-7-10a4 4 0 017-2.6A4 4 0 0119 10c0 5.65-7 10-7 10z" />
+  </svg>
+);
+const IcX = ({ s = 18 }: { s?: number }) => (
+  <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+    <path d="M6 6l12 12M18 6L6 18" />
+  </svg>
+);
+const IcCamera = ({ s = 12 }: { s?: number }) => (
+  <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+    <rect x="3" y="7" width="18" height="13" rx="1" /><path d="M9 7l1.5-3h3L15 7" /><circle cx="12" cy="13" r="3.5" />
+  </svg>
+);
+const IcSearch = ({ s = 14 }: { s?: number }) => (
+  <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+    <circle cx="11" cy="11" r="6" /><path d="M16 16l4 4" />
+  </svg>
+);
+const IcGrid = ({ s = 14 }: { s?: number }) => (
+  <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+    <rect x="4" y="4" width="7" height="7" /><rect x="13" y="4" width="7" height="7" />
+    <rect x="4" y="13" width="7" height="7" /><rect x="13" y="13" width="7" height="7" />
+  </svg>
+);
+const IcMap = ({ s = 14 }: { s?: number }) => (
+  <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+    <path d="M9 4l-6 2v14l6-2 6 2 6-2V4l-6 2-6-2z" /><path d="M9 4v14M15 6v14" />
+  </svg>
+);
+const IcMenu = ({ s = 22 }: { s?: number }) => (
+  <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+    <path d="M4 6h16M4 12h16M4 18h16" />
+  </svg>
+);
+const IcPin = ({ s = 12 }: { s?: number }) => (
+  <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+    <path d="M12 21s-7-7.5-7-12a7 7 0 0114 0c0 4.5-7 12-7 12z" /><circle cx="12" cy="9" r="2.5" />
+  </svg>
+);
+const IcWsp = ({ s = 28 }: { s?: number }) => (
+  <svg width={s} height={s} viewBox="0 0 24 24" fill="currentColor">
+    <path d="M17.6 6.32A7.85 7.85 0 0012.05 4a7.94 7.94 0 00-6.88 11.9L4 20l4.2-1.1a7.94 7.94 0 003.84.98h.01a7.94 7.94 0 005.55-13.56zm-5.55 12.21h-.01a6.6 6.6 0 01-3.36-.92l-.24-.14-2.5.65.67-2.43-.16-.25a6.6 6.6 0 1112.27-4.97 6.6 6.6 0 01-6.67 8.06zm3.62-4.94c-.2-.1-1.17-.58-1.35-.65s-.31-.1-.45.1c-.13.2-.51.65-.62.78-.12.13-.23.15-.42.05-.2-.1-.84-.31-1.6-1-.6-.53-1-1.18-1.11-1.38-.12-.2-.01-.31.09-.41.09-.09.2-.23.3-.35.1-.12.13-.2.2-.33.06-.13.03-.25-.02-.35-.05-.1-.45-1.08-.62-1.48-.16-.39-.33-.34-.45-.34h-.39c-.13 0-.35.05-.53.25s-.7.68-.7 1.66c0 .98.71 1.92.81 2.05.1.13 1.4 2.13 3.38 2.98.47.2.84.32 1.13.41.47.15.9.13 1.24.08.38-.06 1.17-.48 1.34-.94.17-.46.17-.86.12-.94-.05-.08-.18-.13-.38-.23z" />
+  </svg>
+);
 
-export default function PortalInmobiliario() {
-  const [section, setSection] = useState("inicio");
-  const [properties, setProperties] = useState<Property[]>([]);
-  const [filterOp, setFilterOp] = useState("todas");
-  const [filterType, setFilterType] = useState("todos");
-  const [searchText, setSearchText] = useState("");
-  const [selectedProp, setSelectedProp] = useState<Property|null>(null);
-  const [imgIdx, setImgIdx] = useState(0);
-  const [mobileMenu, setMobileMenu] = useState(false);
-  const [scrolled, setScrolled] = useState(false);
-  const propRef = useRef<HTMLDivElement>(null);
+/* ---- Carousel ---- */
+function Carousel({ images, title }: { images: string[]; title: string }) {
+  const [idx, setIdx] = useState(0);
+  const go = (d: number) => setIdx((p) => (p + d + images.length) % images.length);
 
   useEffect(() => {
-    supabase.from("propiedades").select("*").order("destacado", { ascending: false }).order("created_at", { ascending: false })
-      .then(({ data }) => { if (data) setProperties(data); });
-  }, []);
-
-  useEffect(() => { const h = () => setScrolled(window.scrollY > 60); window.addEventListener("scroll", h); return () => window.removeEventListener("scroll", h); }, []);
-
-  const filtered = properties.filter(p => {
-    if (filterOp !== "todas" && p.operacion !== filterOp) return false;
-    if (filterType !== "todos" && p.tipo !== filterType) return false;
-    if (searchText && !p.titulo.toLowerCase().includes(searchText.toLowerCase()) && !p.comuna.toLowerCase().includes(searchText.toLowerCase())) return false;
-    return true;
+    const h = (e: KeyboardEvent) => {
+      if (e.key === "ArrowLeft") go(-1);
+      if (e.key === "ArrowRight") go(1);
+    };
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
   });
 
-  const scrollToProps = () => { setSection("propiedades"); setTimeout(() => propRef.current?.scrollIntoView({ behavior: "smooth" }), 100); };
-  const openProp = (p: Property) => { setSelectedProp(p); setImgIdx(0); document.body.style.overflow = "hidden"; };
-  const closeProp = () => { setSelectedProp(null); document.body.style.overflow = ""; };
+  return (
+    <div className="carousel">
+      <div className="carousel-track" style={{ transform: `translateX(-${idx * 100}%)` }}>
+        {images.map((src, i) => (
+          <div className="carousel-slide" key={i}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={src} alt={`${title} — ${i + 1}`} />
+          </div>
+        ))}
+      </div>
+      <div className="carousel-count">{idx + 1} / {images.length}</div>
+      {images.length > 1 && (
+        <>
+          <button className="carousel-arrow prev" onClick={() => go(-1)} aria-label="Anterior">
+            <IcArrow s={18} left />
+          </button>
+          <button className="carousel-arrow next" onClick={() => go(1)} aria-label="Siguiente">
+            <IcArrow s={18} />
+          </button>
+          <div className="carousel-dots">
+            {images.map((_, i) => (
+              <button key={i} className={`carousel-dot${i === idx ? " active" : ""}`} onClick={() => setIdx(i)} />
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
 
-  const navItems = [{ id:"inicio", label:"Inicio" },{ id:"nosotros", label:"Nosotros" },{ id:"servicios", label:"Servicios" },{ id:"propiedades", label:"Propiedades" },{ id:"contacto", label:"Contacto" }];
-  const services = [
-    { num:"01", title:"Corretaje de Propiedades", desc:"Intermediación profesional en compra, venta y arriendo de inmuebles residenciales y comerciales con asesoría en cada etapa." },
-    { num:"02", title:"Gestión Inmobiliaria", desc:"Administración integral de propiedades: cobranza de arriendos, contratos, mantención y relación con arrendatarios." },
-    { num:"03", title:"Tasación y Avalúo", desc:"Análisis profesional del valor de mercado basado en datos reales, comparables de zona y proyecciones del sector." },
-    { num:"04", title:"Asesoría Legal", desc:"Acompañamiento jurídico en contratos de compraventa, promesas, escrituras, estudios de títulos y trámites legales." },
-  ];
+/* ---- Property Card ---- */
+function PropertyCard({ p, featured, onClick, fav, onFav }: {
+  p: Property; featured?: boolean; onClick: () => void; fav: boolean; onFav: (id: number) => void;
+}) {
+  const imgs = (p.imagenes || "").split(";").filter(Boolean);
+  return (
+    <article className={`card${featured ? " featured" : ""}`} onClick={onClick}>
+      <div className="card-photo">
+        {imgs[0] && <img src={imgs[0]} alt={p.titulo} loading="lazy" />}
+        <div className="card-badges">
+          <div style={{ display: "flex", gap: 8 }}>
+            <span className="badge">{p.operacion === "venta" ? "Venta" : "Arriendo"}</span>
+            {p.destacado && <span className="badge featured-tag">★ Destacada</span>}
+          </div>
+          <button className={`card-fav${fav ? " active" : ""}`}
+            onClick={(e) => { e.stopPropagation(); onFav(p.id); }} aria-label="Guardar">
+            <IcHeart filled={fav} />
+          </button>
+        </div>
+        {imgs.length > 0 && (
+          <div className="card-photo-count"><IcCamera />{imgs.length}</div>
+        )}
+      </div>
+      <div className="card-body">
+        <div className="card-loc">{p.comuna} · {p.ciudad}</div>
+        <h3 className="card-title">{p.titulo}</h3>
+        <div className="card-price">
+          {fmtCLP(p.precio)}
+          {p.operacion === "arriendo" && <span className="uf">/ mes</span>}
+        </div>
+        <div className="card-specs">
+          {p.dormitorios > 0 && <span className="card-spec"><IcBed />{p.dormitorios}</span>}
+          {p.banos > 0 && <span className="card-spec"><IcBath />{p.banos}</span>}
+          <span className="card-spec"><IcSqm />{fmtN(p.metros)} m²</span>
+          {p.estacionamientos > 0 && <span className="card-spec"><IcCar />{p.estacionamientos}</span>}
+        </div>
+      </div>
+    </article>
+  );
+}
 
-  const css = `@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=DM+Sans:wght@300;400;500;600;700&display=swap');*{margin:0;padding:0;box-sizing:border-box;}html{scroll-behavior:smooth;}body{font-family:'DM Sans',sans-serif;background:${C.cream};color:${C.dark};overflow-x:hidden;}.nav{position:fixed;top:0;left:0;right:0;z-index:1000;transition:all .4s;background:${scrolled?"rgba(26,26,26,0.97)":"transparent"};backdrop-filter:${scrolled?"blur(20px)":"none"};border-bottom:${scrolled?"1px solid rgba(200,164,90,0.15)":"none"};padding:${scrolled?"12px 0":"20px 0"};}.nav-inner{max-width:1280px;margin:0 auto;padding:0 32px;display:flex;align-items:center;justify-content:space-between;}.logo-text{font-family:'Playfair Display',serif;font-size:26px;font-weight:700;color:${C.gold};letter-spacing:3px;cursor:pointer;}.logo-sub{font-family:'DM Sans',sans-serif;font-size:10px;color:rgba(255,255,255,0.6);letter-spacing:4px;text-transform:uppercase;margin-top:2px;}.nav-links{display:flex;gap:32px;align-items:center;}.nav-link{font-size:14px;font-weight:500;color:rgba(255,255,255,0.8);cursor:pointer;letter-spacing:1px;text-transform:uppercase;transition:color .3s;border:none;background:none;font-family:'DM Sans',sans-serif;}.nav-link:hover,.nav-link.active{color:${C.gold};}.nav-cta{background:${C.gold};color:${C.dark};padding:10px 24px;font-size:13px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;border:none;cursor:pointer;transition:all .3s;font-family:'DM Sans',sans-serif;}.nav-cta:hover{background:${C.goldLight};transform:translateY(-1px);}.mobile-toggle{display:none;background:none;border:none;color:white;cursor:pointer;}.mobile-menu{display:none;position:fixed;inset:0;background:rgba(26,26,26,0.98);z-index:999;flex-direction:column;align-items:center;justify-content:center;gap:28px;}.mobile-menu.open{display:flex;}.mobile-menu .nav-link{font-size:18px;color:white;}@media(max-width:768px){.nav-links{display:none;}.mobile-toggle{display:block;}}.hero{height:100vh;min-height:700px;position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden;}.hero-bg{position:absolute;inset:0;background:linear-gradient(135deg,${C.dark} 0%,#2a2520 50%,${C.charcoal} 100%);}.hero-pattern{position:absolute;inset:0;opacity:0.03;background-image:repeating-linear-gradient(45deg,transparent,transparent 35px,rgba(200,164,90,0.5) 35px,rgba(200,164,90,0.5) 36px);}.hero-overlay{position:absolute;inset:0;background:radial-gradient(ellipse at 30% 50%,rgba(200,164,90,0.08) 0%,transparent 60%);}.hero-content{position:relative;z-index:2;text-align:center;max-width:900px;padding:0 32px;animation:fadeUp .8s ease-out;}.hero-badge{display:inline-block;border:1px solid ${C.gold};color:${C.gold};font-size:11px;font-weight:600;letter-spacing:4px;text-transform:uppercase;padding:8px 20px;margin-bottom:32px;}.hero h1{font-family:'Playfair Display',serif;font-size:clamp(36px,6vw,72px);font-weight:700;color:${C.white};line-height:1.1;margin-bottom:20px;}.hero h1 span{color:${C.gold};}.hero-desc{font-size:clamp(16px,2vw,20px);color:rgba(255,255,255,0.6);line-height:1.7;max-width:600px;margin:0 auto 40px;font-weight:300;}.hero-btns{display:flex;gap:16px;justify-content:center;flex-wrap:wrap;}.btn-primary{background:${C.gold};color:${C.dark};padding:16px 40px;font-size:14px;font-weight:700;letter-spacing:2px;text-transform:uppercase;border:none;cursor:pointer;transition:all .3s;font-family:'DM Sans',sans-serif;}.btn-primary:hover{background:${C.goldLight};transform:translateY(-2px);box-shadow:0 8px 30px rgba(200,164,90,0.3);}.btn-outline{background:transparent;color:${C.white};padding:16px 40px;font-size:14px;font-weight:600;letter-spacing:2px;text-transform:uppercase;border:1px solid rgba(255,255,255,0.3);cursor:pointer;transition:all .3s;font-family:'DM Sans',sans-serif;}.btn-outline:hover{border-color:${C.gold};color:${C.gold};}.hero-stats{display:flex;gap:48px;justify-content:center;margin-top:60px;flex-wrap:wrap;}.stat{text-align:center;}.stat-num{font-family:'Playfair Display',serif;font-size:36px;font-weight:700;color:${C.gold};}.stat-label{font-size:12px;color:rgba(255,255,255,0.5);letter-spacing:2px;text-transform:uppercase;margin-top:4px;}@keyframes fadeUp{from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:translateY(0)}}.section{padding:100px 32px;max-width:1280px;margin:0 auto;}.section-label{font-size:12px;font-weight:600;letter-spacing:4px;text-transform:uppercase;color:${C.gold};margin-bottom:12px;}.section-title{font-family:'Playfair Display',serif;font-size:clamp(28px,4vw,44px);font-weight:600;color:${C.dark};margin-bottom:16px;line-height:1.2;}.section-desc{font-size:17px;color:${C.warmGray};max-width:600px;line-height:1.7;margin-bottom:48px;}.about-wrap{background:${C.white};}.about-grid{display:grid;grid-template-columns:1fr 1fr;gap:80px;align-items:center;}.about-img{aspect-ratio:4/5;background:linear-gradient(135deg,${C.dark},${C.charcoal});position:relative;overflow:hidden;}.about-img-inner{position:absolute;inset:0;background:url('https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=800') center/cover;opacity:0.7;}.about-img-overlay{position:absolute;bottom:0;left:0;right:0;padding:32px;background:linear-gradient(transparent,rgba(0,0,0,0.8));}.about-img-text{font-family:'Playfair Display',serif;font-size:22px;color:${C.gold};}.about-features{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:40px;}.about-feat{padding:20px;border:1px solid rgba(200,164,90,0.2);}.about-feat h4{font-family:'Playfair Display',serif;font-size:16px;color:${C.dark};margin-bottom:6px;}.about-feat p{font-size:13px;color:${C.warmGray};line-height:1.5;}@media(max-width:768px){.about-grid{grid-template-columns:1fr;gap:40px;}}.services-wrap{background:${C.dark};}.services-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:32px;}.service-card{background:${C.darkAlt};border:1px solid rgba(200,164,90,0.1);padding:40px 32px;transition:all .4s;position:relative;overflow:hidden;}.service-card::before{content:'';position:absolute;top:0;left:0;width:3px;height:0;background:${C.gold};transition:height .4s;}.service-card:hover::before{height:100%;}.service-card:hover{border-color:rgba(200,164,90,0.3);transform:translateY(-4px);}.service-num{font-family:'Playfair Display',serif;font-size:48px;font-weight:700;color:rgba(200,164,90,0.15);line-height:1;margin-bottom:16px;}.service-card h3{font-family:'Playfair Display',serif;font-size:20px;color:${C.white};margin-bottom:12px;}.service-card p{font-size:14px;color:rgba(255,255,255,0.5);line-height:1.7;}.props-wrap{background:${C.cream};}.filters{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:40px;}.filter-group{display:flex;}.filter-btn{padding:10px 20px;font-size:13px;font-weight:600;letter-spacing:1px;text-transform:uppercase;border:1px solid rgba(0,0,0,0.1);background:${C.white};color:${C.warmGray};cursor:pointer;transition:all .3s;font-family:'DM Sans',sans-serif;}.filter-btn.active{background:${C.dark};color:${C.gold};border-color:${C.dark};}.search-box{display:flex;align-items:center;gap:8px;border:1px solid rgba(0,0,0,0.1);background:${C.white};padding:0 16px;margin-left:auto;}.search-box input{border:none;outline:none;font-size:14px;padding:10px 0;width:200px;background:transparent;font-family:'DM Sans',sans-serif;}.search-box svg{color:${C.warmGray};}@media(max-width:768px){.search-box{margin-left:0;width:100%;}.search-box input{width:100%;}}.props-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:28px;}@media(max-width:480px){.props-grid{grid-template-columns:1fr;}}.prop-card{background:${C.white};border:1px solid rgba(0,0,0,0.06);overflow:hidden;cursor:pointer;transition:all .4s;}.prop-card:hover{transform:translateY(-6px);box-shadow:0 20px 50px rgba(0,0,0,0.08);}.prop-img{height:240px;position:relative;overflow:hidden;}.prop-img img{width:100%;height:100%;object-fit:cover;transition:transform .6s;}.prop-card:hover .prop-img img{transform:scale(1.05);}.prop-badge{position:absolute;top:16px;left:16px;padding:6px 14px;font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;}.prop-badge.venta{background:${C.gold};color:${C.dark};}.prop-badge.arriendo{background:${C.accent};color:${C.white};}.prop-dest{position:absolute;top:16px;right:16px;background:rgba(0,0,0,0.7);color:${C.gold};padding:4px 10px;font-size:10px;font-weight:700;letter-spacing:1px;display:flex;align-items:center;gap:4px;}.prop-body{padding:24px;}.prop-price{font-family:'Playfair Display',serif;font-size:24px;font-weight:700;color:${C.dark};margin-bottom:6px;}.prop-title{font-size:15px;font-weight:500;color:${C.charcoal};margin-bottom:4px;}.prop-loc{font-size:13px;color:${C.warmGray};display:flex;align-items:center;gap:4px;margin-bottom:16px;}.prop-specs{display:flex;gap:16px;padding-top:16px;border-top:1px solid rgba(0,0,0,0.06);}.prop-spec{display:flex;align-items:center;gap:6px;font-size:13px;color:${C.warmGray};}.prop-spec svg{color:${C.gold};}.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:2000;display:flex;align-items:center;justify-content:center;animation:fadeIn .3s;backdrop-filter:blur(4px);}.modal{background:${C.white};width:95%;max-width:980px;max-height:92vh;overflow-y:auto;position:relative;}.modal-close{position:absolute;top:16px;right:16px;z-index:10;background:rgba(0,0,0,0.6);border:none;color:white;width:40px;height:40px;display:flex;align-items:center;justify-content:center;cursor:pointer;}.modal-close:hover{background:rgba(0,0,0,0.9);}.modal-gallery{position:relative;height:420px;background:${C.dark};}.modal-gallery img{width:100%;height:100%;object-fit:cover;}.modal-nav{position:absolute;top:50%;transform:translateY(-50%);background:rgba(0,0,0,0.5);border:none;color:white;width:44px;height:44px;display:flex;align-items:center;justify-content:center;cursor:pointer;}.modal-nav:hover{background:rgba(200,164,90,0.8);}.modal-nav.left{left:12px;}.modal-nav.right{right:12px;}.modal-dots{position:absolute;bottom:16px;left:50%;transform:translateX(-50%);display:flex;gap:8px;}.modal-dot{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,0.4);border:none;cursor:pointer;}.modal-dot.active{background:${C.gold};width:24px;border-radius:4px;}.modal-body{padding:40px;}.modal-body .prop-badge{position:static;display:inline-block;margin-bottom:16px;}.modal-body h2{font-family:'Playfair Display',serif;font-size:28px;font-weight:600;color:${C.dark};margin-bottom:8px;}.modal-body .loc{font-size:15px;color:${C.warmGray};display:flex;align-items:center;gap:6px;margin-bottom:24px;}.modal-price-row{display:flex;align-items:baseline;gap:16px;margin-bottom:28px;flex-wrap:wrap;}.modal-price{font-family:'Playfair Display',serif;font-size:32px;font-weight:700;color:${C.dark};}.modal-gc{font-size:14px;color:${C.warmGray};}.modal-specs{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:16px;margin-bottom:32px;padding:24px;background:${C.cream};}.modal-spec{text-align:center;}.modal-spec-val{font-family:'Playfair Display',serif;font-size:22px;font-weight:700;color:${C.dark};}.modal-spec-label{font-size:11px;color:${C.warmGray};letter-spacing:1px;text-transform:uppercase;margin-top:2px;}.modal-desc{font-size:15px;line-height:1.8;color:#555;margin-bottom:28px;}.modal-tags{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:32px;}.modal-tag{padding:5px 14px;font-size:12px;color:${C.accent};border:1px solid rgba(61,107,94,0.3);font-weight:500;}.modal-contact{display:flex;gap:12px;flex-wrap:wrap;}.modal-wa{display:flex;align-items:center;gap:8px;background:#25D366;color:white;padding:14px 28px;font-size:14px;font-weight:700;letter-spacing:1px;text-transform:uppercase;border:none;cursor:pointer;transition:all .3s;text-decoration:none;}.modal-wa:hover{background:#20B858;transform:translateY(-2px);}.modal-call{display:flex;align-items:center;gap:8px;background:${C.dark};color:${C.gold};padding:14px 28px;font-size:14px;font-weight:600;border:none;cursor:pointer;transition:all .3s;text-decoration:none;}.modal-call:hover{background:${C.charcoal};}@media(max-width:768px){.modal-gallery{height:280px;}.modal-body{padding:24px;}}@keyframes fadeIn{from{opacity:0}to{opacity:1}}.contact-wrap{background:${C.dark};}.contact-grid{display:grid;grid-template-columns:1fr 1fr;gap:60px;}.contact-info h3{font-family:'Playfair Display',serif;font-size:18px;color:${C.gold};margin-bottom:16px;margin-top:28px;}.contact-info h3:first-child{margin-top:0;}.contact-item{display:flex;align-items:center;gap:12px;color:rgba(255,255,255,0.7);font-size:15px;margin-bottom:10px;}.contact-item svg{color:${C.gold};flex-shrink:0;}.contact-form{display:flex;flex-direction:column;gap:16px;}.contact-form input,.contact-form textarea{background:rgba(255,255,255,0.06);border:1px solid rgba(200,164,90,0.15);color:white;padding:14px 18px;font-size:14px;font-family:'DM Sans',sans-serif;outline:none;transition:border .3s;}.contact-form input:focus,.contact-form textarea:focus{border-color:${C.gold};}.contact-form textarea{resize:vertical;min-height:120px;}.contact-form button{background:${C.gold};color:${C.dark};padding:16px;font-size:14px;font-weight:700;letter-spacing:2px;text-transform:uppercase;border:none;cursor:pointer;transition:all .3s;font-family:'DM Sans',sans-serif;}.contact-form button:hover{background:${C.goldLight};}@media(max-width:768px){.contact-grid{grid-template-columns:1fr;}}.footer{background:${C.dark};border-top:1px solid rgba(200,164,90,0.1);padding:40px 32px;text-align:center;}.footer p{font-size:13px;color:rgba(255,255,255,0.4);}.footer-brand{font-family:'Playfair Display',serif;font-size:20px;color:${C.gold};letter-spacing:3px;margin-bottom:12px;}.wa-float{position:fixed;bottom:28px;right:28px;z-index:900;background:#25D366;color:white;width:60px;height:60px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 20px rgba(37,211,102,0.4);transition:all .3s;border:none;text-decoration:none;}.wa-float:hover{transform:scale(1.1);box-shadow:0 6px 30px rgba(37,211,102,0.5);}`;
+/* ---- Property Detail Modal ---- */
+function PropertyDetail({ p, onClose, fav, onFav }: {
+  p: Property; onClose: () => void; fav: boolean; onFav: (id: number) => void;
+}) {
+  const imgs = (p.imagenes || "").split(";").filter(Boolean);
+  const tags = p.etiquetas ? p.etiquetas.split(";").filter(Boolean) : [];
+  const wspMsg = encodeURIComponent(`Hola, me interesa la propiedad ${p.id} — ${p.titulo} (${p.comuna}). ¿Podemos coordinar una visita?`);
+
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", h);
+    document.body.style.overflow = "hidden";
+    return () => { window.removeEventListener("keydown", h); document.body.style.overflow = ""; };
+  }, [onClose]);
 
   return (
-    <div>
-      <style>{css}</style>
-      <nav className="nav"><div className="nav-inner"><div onClick={() => setSection("inicio")} style={{cursor:"pointer"}}><div className="logo-text">MARLO</div><div className="logo-sub">Propiedades</div></div><div className="nav-links">{navItems.map(n => (<button key={n.id} className={`nav-link ${section===n.id?"active":""}`} onClick={() => { setSection(n.id); setMobileMenu(false); }}>{n.label}</button>))}<button className="nav-cta" onClick={scrollToProps}>Ver Propiedades</button></div><button className="mobile-toggle" onClick={() => setMobileMenu(!mobileMenu)}>{mobileMenu ? I.close : I.menu}</button></div></nav>
-      <div className={`mobile-menu ${mobileMenu?"open":""}`}>{navItems.map(n => (<button key={n.id} className="nav-link" onClick={() => { setSection(n.id); setMobileMenu(false); }}>{n.label}</button>))}</div>
-
-      {section === "inicio" && (<section className="hero"><div className="hero-bg"/><div className="hero-pattern"/><div className="hero-overlay"/><div className="hero-content"><div className="hero-badge">Corretaje &amp; Gestión Inmobiliaria</div><h1>Encontramos el <span>hogar perfecto</span> para usted</h1><p className="hero-desc">Más de una década conectando familias con su propiedad ideal. Servicio personalizado, transparente y profesional en cada operación.</p><div className="hero-btns"><button className="btn-primary" onClick={scrollToProps}>Explorar Propiedades</button><button className="btn-outline" onClick={() => setSection("contacto")}>Contáctenos</button></div><div className="hero-stats"><div className="stat"><div className="stat-num">250+</div><div className="stat-label">Propiedades</div></div><div className="stat"><div className="stat-num">98%</div><div className="stat-label">Satisfacción</div></div><div className="stat"><div className="stat-num">10+</div><div className="stat-label">Años</div></div></div></div></section>)}
-
-      {(section === "inicio" || section === "nosotros") && (<div className="about-wrap"><section className="section"><div className="about-grid"><div className="about-img"><div className="about-img-inner"/><div className="about-img-overlay"><div className="about-img-text">&ldquo;Donde cada propiedad cuenta una historia&rdquo;</div></div></div><div><div className="section-label">Sobre Nosotros</div><h2 className="section-title">Expertos en el mercado inmobiliario chileno</h2><p className="section-desc">En MARLO Propiedades nos especializamos en corretaje y gestión inmobiliaria con un enfoque personalizado. Nuestro compromiso es entregar un servicio íntegro, transparente y eficiente.</p><div className="about-features"><div className="about-feat"><h4>Experiencia</h4><p>Conocimiento profundo del mercado local y tendencias del sector.</p></div><div className="about-feat"><h4>Confianza</h4><p>Operaciones transparentes con respaldo legal en cada etapa.</p></div><div className="about-feat"><h4>Personalización</h4><p>Atención dedicada a las necesidades específicas de cada cliente.</p></div><div className="about-feat"><h4>Resultados</h4><p>Optimizamos tiempos y valores para lograr la mejor operación.</p></div></div></div></div></section></div>)}
-
-      {(section === "inicio" || section === "servicios") && (<div className="services-wrap"><section className="section"><div className="section-label" style={{color:C.gold}}>Nuestros Servicios</div><h2 className="section-title" style={{color:C.white}}>Soluciones inmobiliarias integrales</h2><p className="section-desc" style={{color:"rgba(255,255,255,0.5)"}}>Ofrecemos un abanico completo de servicios para propietarios, inversionistas y personas que buscan su próximo hogar.</p><div className="services-grid">{services.map(s => (<div className="service-card" key={s.num}><div className="service-num">{s.num}</div><h3>{s.title}</h3><p>{s.desc}</p></div>))}</div></section></div>)}
-
-      {(section === "inicio" || section === "propiedades") && (<div className="props-wrap" ref={propRef}><section className="section"><div className="section-label">Propiedades</div><h2 className="section-title">Encuentra tu próxima inversión</h2><p className="section-desc">Explora nuestra selección de propiedades disponibles en las mejores ubicaciones.</p><div className="filters"><div className="filter-group">{(["todas","venta","arriendo"] as const).map(v => (<button key={v} className={`filter-btn ${filterOp===v?"active":""}`} onClick={() => setFilterOp(v)}>{v.charAt(0).toUpperCase()+v.slice(1)}</button>))}</div><div className="filter-group">{([["todos","Todos"],["casa","Casas"],["departamento","Deptos"],["oficina","Oficinas"],["parcela","Parcelas"]] as const).map(([v,l]) => (<button key={v} className={`filter-btn ${filterType===v?"active":""}`} onClick={() => setFilterType(v)}>{l}</button>))}</div><div className="search-box">{I.search}<input placeholder="Buscar por comuna o título..." value={searchText} onChange={e => setSearchText(e.target.value)} /></div></div><div className="props-grid">{filtered.map(p => { const imgs = (p.imagenes||"").split(";").filter(Boolean); return (<div className="prop-card" key={p.id} onClick={() => openProp(p)}><div className="prop-img">{imgs[0] && <img src={imgs[0]} alt={p.titulo} loading="lazy" />}<div className={`prop-badge ${p.operacion}`}>{p.operacion}</div>{p.destacado && <div className="prop-dest">{I.star} Destacado</div>}</div><div className="prop-body"><div className="prop-price">{formatCLP(p.precio)}{p.operacion==="arriendo"?"/mes":""}</div><div className="prop-title">{p.titulo}</div><div className="prop-loc">{I.pin} {p.comuna}, {p.ciudad}</div><div className="prop-specs">{p.dormitorios > 0 && <div className="prop-spec">{I.bed} {p.dormitorios}</div>}{p.banos > 0 && <div className="prop-spec">{I.bath} {p.banos}</div>}<div className="prop-spec">{I.area} {p.metros} m²</div>{p.estacionamientos > 0 && <div className="prop-spec">{I.car} {p.estacionamientos}</div>}</div></div></div>); })}</div>{filtered.length === 0 && (<div style={{textAlign:"center",padding:"60px 0",color:C.warmGray}}><p style={{fontSize:18}}>No se encontraron propiedades con estos filtros.</p></div>)}</section></div>)}
-
-      {(section === "inicio" || section === "contacto") && (<div className="contact-wrap"><section className="section"><div className="section-label" style={{color:C.gold}}>Contacto</div><h2 className="section-title" style={{color:C.white,marginBottom:48}}>Conversemos sobre su próximo paso</h2><div className="contact-grid"><div className="contact-info"><h3>Oficina Central</h3><div className="contact-item">{I.pin} <span>Santiago, Chile</span></div><h3>Teléfonos</h3><div className="contact-item">{I.phone} <a href="tel:+56971087515" style={{color:"inherit",textDecoration:"none"}}>+56 9 7108 7515</a></div><div className="contact-item">{I.phone} <a href="tel:+56971087513" style={{color:"inherit",textDecoration:"none"}}>+56 9 7108 7513</a></div><h3>Correos Electrónicos</h3><div className="contact-item">{I.mail} <span>contacto@marlopropiedades.cl</span></div><div className="contact-item">{I.mail} <span>arriendo@marlopropiedades.cl</span></div><h3>Horario de Atención</h3><div className="contact-item" style={{display:"block",lineHeight:1.8}}>Lunes a Viernes: 09:00 – 18:00<br/>Sábado: 10:00 – 14:00</div></div><div className="contact-form"><input placeholder="Nombre completo" /><input placeholder="Correo electrónico" /><input placeholder="Teléfono" /><textarea placeholder="Cuéntenos qué está buscando..." /><button>Enviar Mensaje</button></div></div></section></div>)}
-
-      <footer className="footer"><div className="footer-brand">MARLO</div><p>© {new Date().getFullYear()} MARLO Propiedades · Corretaje &amp; Gestión Inmobiliaria · Todos los derechos reservados</p></footer>
-
-      {selectedProp && (() => { const p = selectedProp; const imgs = (p.imagenes||"").split(";").filter(Boolean); const tags = p.etiquetas ? p.etiquetas.split(";") : []; return (<div className="modal-overlay" onClick={closeProp}><div className="modal" onClick={e => e.stopPropagation()}><button className="modal-close" onClick={closeProp}>{I.close}</button><div className="modal-gallery">{imgs[imgIdx] && <img src={imgs[imgIdx]} alt={p.titulo} />}{imgs.length > 1 && (<><button className="modal-nav left" onClick={() => setImgIdx((imgIdx-1+imgs.length)%imgs.length)}>{I.chevL}</button><button className="modal-nav right" onClick={() => setImgIdx((imgIdx+1)%imgs.length)}>{I.chevR}</button><div className="modal-dots">{imgs.map((_,i) => <button key={i} className={`modal-dot ${i===imgIdx?"active":""}`} onClick={() => setImgIdx(i)} />)}</div></>)}</div><div className="modal-body"><div className={`prop-badge ${p.operacion}`}>{p.operacion}</div><h2>{p.titulo}</h2><div className="loc">{I.pin} {p.direccion}, {p.comuna}, {p.ciudad}</div><div className="modal-price-row"><div className="modal-price">{formatFullCLP(p.precio)}{p.operacion==="arriendo"?"/mes":""}</div>{p.gastos_comunes > 0 && <div className="modal-gc">+ GG.CC. {formatFullCLP(p.gastos_comunes)}</div>}</div><div className="modal-specs">{p.dormitorios > 0 && <div className="modal-spec"><div className="modal-spec-val">{p.dormitorios}</div><div className="modal-spec-label">Dormitorios</div></div>}{p.banos > 0 && <div className="modal-spec"><div className="modal-spec-val">{p.banos}</div><div className="modal-spec-label">Baños</div></div>}<div className="modal-spec"><div className="modal-spec-val">{p.metros}</div><div className="modal-spec-label">m² útiles</div></div><div className="modal-spec"><div className="modal-spec-val">{p.estacionamientos}</div><div className="modal-spec-label">Estac.</div></div><div className="modal-spec"><div className="modal-spec-val">{p.bodega}</div><div className="modal-spec-label">Bodega</div></div></div><p className="modal-desc">{p.descripcion}</p>{tags.length > 0 && (<div className="modal-tags">{tags.map((t,i) => <span className="modal-tag" key={i}>{t}</span>)}</div>)}<div className="modal-contact"><a className="modal-wa" href={`https://wa.me/56971087515?text=Hola, me interesa la propiedad: ${p.titulo}`} target="_blank" rel="noopener noreferrer">{I.wa} WhatsApp</a><a className="modal-call" href="tel:+56971087515">{I.phone} Llamar</a></div></div></div></div>); })()}
-
-      <a className="wa-float" href="https://wa.me/56971087515?text=Hola, me interesa conocer sus propiedades disponibles" target="_blank" rel="noopener noreferrer">{I.wa}</a>
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <button className="modal-close" onClick={onClose} aria-label="Cerrar"><IcX /></button>
+        <Carousel images={imgs.length ? imgs : ["https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=800"]} title={p.titulo} />
+        <div className="modal-body">
+          <div className="detail-main">
+            <div className="detail-loc">
+              <span style={{ display: "inline-flex", gap: 4, alignItems: "center" }}>
+                <IcPin />{p.direccion}
+              </span>
+              <span>·</span><span>{p.comuna}</span><span>·</span><span>{p.ciudad}</span>
+            </div>
+            <h1 className="detail-title">{p.titulo}</h1>
+            <div className="detail-tags">
+              <span className="detail-tag">{p.operacion === "venta" ? "Venta" : "Arriendo"}</span>
+              <span className="detail-tag">{TIPO_LABEL[p.tipo] || p.tipo}</span>
+              {tags.map((t) => <span className="detail-tag" key={t}>{t}</span>)}
+            </div>
+            <div className="detail-specs">
+              {p.dormitorios > 0 && (
+                <div className="detail-spec">
+                  <div className="detail-spec-num">{p.dormitorios}</div>
+                  <div className="detail-spec-label">Dormitorios</div>
+                </div>
+              )}
+              {p.banos > 0 && (
+                <div className="detail-spec">
+                  <div className="detail-spec-num">{p.banos}</div>
+                  <div className="detail-spec-label">Baños</div>
+                </div>
+              )}
+              <div className="detail-spec">
+                <div className="detail-spec-num">{fmtN(p.metros)}</div>
+                <div className="detail-spec-label">m² totales</div>
+              </div>
+              {p.estacionamientos > 0 && (
+                <div className="detail-spec">
+                  <div className="detail-spec-num">{p.estacionamientos}</div>
+                  <div className="detail-spec-label">Estac.</div>
+                </div>
+              )}
+            </div>
+            {p.descripcion && (
+              <div className="detail-section">
+                <h3>Sobre esta propiedad</h3>
+                <p>{p.descripcion}</p>
+              </div>
+            )}
+            <div className="detail-section">
+              <h3>Ubicación</h3>
+              <div style={{ position: "relative", aspectRatio: "16/9", background: "var(--bg-warm)", border: "1px solid var(--line)", overflow: "hidden" }}>
+                <div style={{ position: "absolute", inset: 0, backgroundImage: "linear-gradient(90deg, var(--line-2) 1px, transparent 1px),linear-gradient(0deg, var(--line-2) 1px, transparent 1px)", backgroundSize: "32px 32px" }} />
+                <div style={{ position: "absolute", left: "50%", top: "50%", transform: "translate(-50%,-100%)", fontFamily: "var(--font-mono)", fontSize: 12, padding: "6px 10px", background: "var(--ink)", color: "var(--bg)", display: "flex", alignItems: "center", gap: 4 }}>
+                  <IcPin />{p.direccion}
+                </div>
+              </div>
+            </div>
+          </div>
+          <aside className="detail-rail">
+            <div className="detail-price-card">
+              <div className="detail-price-label">{p.operacion === "venta" ? "Precio de venta" : "Arriendo mensual"}</div>
+              <div className="detail-price">{fmtCLP(p.precio)}</div>
+              <div className="detail-price-sub">
+                <span>≈ {fmtUF(p.precio)}</span>
+                {p.gastos_comunes > 0 && <span>Gastos comunes: {fmtCLP(p.gastos_comunes)}</span>}
+              </div>
+              <div className="detail-actions">
+                <a className="btn whatsapp" href={`https://wa.me/56971087515?text=${wspMsg}`} target="_blank" rel="noopener noreferrer">
+                  <IcWsp s={16} /> Consultar por WhatsApp
+                </a>
+                <a className="btn primary" href="tel:+56971087515">Llamar</a>
+                <button className="btn ghost" onClick={() => onFav(p.id)}>
+                  <IcHeart filled={fav} s={14} />{fav ? "Guardada" : "Guardar"}
+                </button>
+              </div>
+            </div>
+            <div className="detail-meta-list">
+              <div className="detail-meta-row"><span className="k">Tipo</span><span className="v">{TIPO_LABEL[p.tipo] || p.tipo}</span></div>
+              <div className="detail-meta-row"><span className="k">Operación</span><span className="v">{p.operacion === "venta" ? "Venta" : "Arriendo"}</span></div>
+              <div className="detail-meta-row"><span className="k">Superficie</span><span className="v">{fmtN(p.metros)} m²</span></div>
+              {p.gastos_comunes > 0 && <div className="detail-meta-row"><span className="k">GG.CC.</span><span className="v">{fmtCLP(p.gastos_comunes)}</span></div>}
+              <div className="detail-meta-row"><span className="k">Bodega</span><span className="v">{p.bodega ? "Sí" : "No"}</span></div>
+              {p.estacionamientos > 0 && <div className="detail-meta-row"><span className="k">Estacionamientos</span><span className="v">{p.estacionamientos}</span></div>}
+            </div>
+          </aside>
+        </div>
+      </div>
     </div>
+  );
+}
+
+/* ---- Calculator ---- */
+function Calculator({ defaultPrice }: { defaultPrice: number }) {
+  const [price, setPrice] = useState(defaultPrice);
+  const [pie, setPie] = useState(20);
+  const [years, setYears] = useState(20);
+  const [rate, setRate] = useState(4.5);
+
+  const loan = price * (1 - pie / 100);
+  const monthlyRate = rate / 100 / 12;
+  const n = years * 12;
+  const dividendo = monthlyRate === 0 ? loan / n : (loan * monthlyRate * Math.pow(1 + monthlyRate, n)) / (Math.pow(1 + monthlyRate, n) - 1);
+
+  return (
+    <div className="calc-section">
+      <div className="calc-inner">
+        <div>
+          <div className="eyebrow">Simulador hipotecario</div>
+          <h2 className="section-title" style={{ color: "var(--bg)", marginTop: 12 }}>
+            ¿Cuánto pagarías<br /><em>al mes?</em>
+          </h2>
+          <p style={{ marginTop: 20, fontSize: 16, color: "rgba(245,243,239,0.6)", maxWidth: 420, lineHeight: 1.55 }}>
+            Estima tu dividendo mensual. Tasa referencial del mercado: 4.5% anual. Consulta con tu banco para una cotización exacta.
+          </p>
+          <div style={{ marginTop: 32, display: "flex", flexDirection: "column", gap: 12 }}>
+            {[
+              { label: "Tasa anual referencial", val: `${rate}%` },
+              { label: "Plazo disponible", val: `hasta ${years} años` },
+            ].map(({ label, val }) => (
+              <div key={label} style={{ display: "flex", justifyContent: "space-between", paddingBottom: 12, borderBottom: "1px solid rgba(255,255,255,0.08)", fontFamily: "var(--font-mono)", fontSize: 13 }}>
+                <span style={{ color: "rgba(245,243,239,0.55)", textTransform: "uppercase", letterSpacing: "0.1em", fontSize: 11 }}>{label}</span>
+                <span style={{ color: "rgba(245,243,239,0.8)" }}>{val}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="calc-card">
+          <div className="calc-row">
+            <div className="calc-label">Valor de la propiedad</div>
+            <div className="calc-input">
+              <span className="currency">$</span>
+              <input type="number" value={price} onChange={(e) => setPrice(Number(e.target.value))} />
+            </div>
+            <input type="range" className="calc-slider" min={50000000} max={800000000} step={5000000} value={price} onChange={(e) => setPrice(Number(e.target.value))} />
+            <div className="calc-slider-meta"><span>$50M</span><span>$800M</span></div>
+          </div>
+          <div className="calc-row">
+            <div className="calc-label">Pie ({pie}%)</div>
+            <div className="calc-input">
+              <input type="number" value={pie} onChange={(e) => setPie(Number(e.target.value))} style={{ fontSize: 28 }} />
+              <span className="currency">%</span>
+            </div>
+            <input type="range" className="calc-slider" min={10} max={50} step={5} value={pie} onChange={(e) => setPie(Number(e.target.value))} />
+            <div className="calc-slider-meta"><span>10%</span><span>50%</span></div>
+          </div>
+          <div className="calc-row" style={{ marginBottom: 0 }}>
+            <div className="calc-label">Plazo ({years} años)</div>
+            <input type="range" className="calc-slider" min={5} max={30} step={5} value={years} onChange={(e) => setYears(Number(e.target.value))} />
+            <div className="calc-slider-meta"><span>5 años</span><span>30 años</span></div>
+          </div>
+          <div className="calc-result">
+            <div>
+              <div className="calc-result-val">{fmtCLP(Math.round(dividendo))}</div>
+              <div className="calc-result-label">Dividendo mensual est.</div>
+            </div>
+            <div>
+              <div className="calc-result-val small">{fmtCLP(Math.round(loan))}</div>
+              <div className="calc-result-label">Monto a financiar</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---- Main Portal ---- */
+export default function PortalInmobiliario() {
+  const [properties, setProperties] = useState<Property[]>([]);
+  const [filters, setFilters] = useState({ operacion: "todas", tipo: "todos", comuna: "todas", q: "" });
+  const [sort, setSort] = useState("destacadas");
+  const [selected, setSelected] = useState<Property | null>(null);
+  const [favs, setFavs] = useState<number[]>([]);
+  const [scrolled, setScrolled] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const propsRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    supabase.from("propiedades").select("*")
+      .order("destacado", { ascending: false })
+      .order("created_at", { ascending: false })
+      .then(({ data }) => { if (data) setProperties(data); });
+    try { setFavs(JSON.parse(localStorage.getItem("marlo_favs") || "[]")); } catch { /* noop */ }
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem("marlo_favs", JSON.stringify(favs));
+  }, [favs]);
+
+  useEffect(() => {
+    const h = () => setScrolled(window.scrollY > 24);
+    window.addEventListener("scroll", h);
+    return () => window.removeEventListener("scroll", h);
+  }, []);
+
+  const comunas = useMemo(() => [...new Set(properties.map((p) => p.comuna))].sort(), [properties]);
+
+  const filtered = useMemo(() => {
+    let r = properties.filter((p) => {
+      if (filters.operacion !== "todas" && p.operacion !== filters.operacion) return false;
+      if (filters.tipo !== "todos" && p.tipo !== filters.tipo) return false;
+      if (filters.comuna !== "todas" && p.comuna !== filters.comuna) return false;
+      if (filters.q) {
+        const q = filters.q.toLowerCase();
+        if (!(p.titulo.toLowerCase().includes(q) || p.comuna.toLowerCase().includes(q) || p.descripcion?.toLowerCase().includes(q))) return false;
+      }
+      return true;
+    });
+    if (sort === "destacadas") r = [...r].sort((a, b) => (b.destacado ? 1 : 0) - (a.destacado ? 1 : 0));
+    else if (sort === "precio-asc") r = [...r].sort((a, b) => a.precio - b.precio);
+    else if (sort === "precio-desc") r = [...r].sort((a, b) => b.precio - a.precio);
+    else if (sort === "metros-desc") r = [...r].sort((a, b) => b.metros - a.metros);
+    return r;
+  }, [properties, filters, sort]);
+
+  const featuredFirst = filtered.find((p) => p.destacado);
+  const toggleFav = (id: number) => setFavs((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
+  const scrollToProps = () => { setTimeout(() => propsRef.current?.scrollIntoView({ behavior: "smooth" }), 50); };
+  const setFilter = (key: string, val: string) => setFilters((prev) => ({ ...prev, [key]: val }));
+
+  const navLinks = [
+    { label: "Propiedades", onClick: scrollToProps },
+    { label: "Calculadora", onClick: () => document.getElementById("credito")?.scrollIntoView({ behavior: "smooth" }) },
+    { label: "Quiénes somos", onClick: () => document.getElementById("quienes")?.scrollIntoView({ behavior: "smooth" }) },
+    { label: "Contacto", onClick: () => document.getElementById("contacto")?.scrollIntoView({ behavior: "smooth" }) },
+  ];
+
+  return (
+    <>
+      {/* NAV */}
+      <header className={`nav${scrolled ? " scrolled" : ""}`}>
+        <div className="nav-inner">
+          <div className="logo" style={{ cursor: "pointer" }} onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}>
+            <span className="logo-mark">Marlo<em>.</em></span>
+            <span className="logo-sub">Propiedades</span>
+          </div>
+          <nav className="nav-links">
+            {navLinks.map((l) => (
+              <a key={l.label} onClick={l.onClick} style={{ cursor: "pointer" }}>{l.label}</a>
+            ))}
+          </nav>
+          <a className="nav-cta" href="/admin">Acceso corredores <IcArrow s={14} /></a>
+          <button className="nav-hamburger" onClick={() => setMobileOpen(true)} aria-label="Menú"><IcMenu /></button>
+        </div>
+      </header>
+
+      {/* MOBILE MENU */}
+      <div className={`mobile-menu${mobileOpen ? " open" : ""}`}>
+        <button style={{ position: "absolute", top: 20, right: 24 }} onClick={() => setMobileOpen(false)}><IcX s={24} /></button>
+        {navLinks.map((l) => (
+          <a key={l.label} onClick={() => { l.onClick(); setMobileOpen(false); }} style={{ cursor: "pointer" }}>{l.label}</a>
+        ))}
+        <a className="btn primary" href="/admin" style={{ marginTop: 16 }}>Acceso corredores</a>
+      </div>
+
+      {/* HERO */}
+      <section className="hero">
+        <div className="hero-grid">
+          <div className="hero-copy">
+            <div>
+              <div className="hero-eyebrow">Marlo Propiedades · est. 2014</div>
+              <h1 className="hero-title">Encontrar dónde<br />vivir, <em>despacio.</em></h1>
+              <p className="hero-desc">Curamos propiedades en barrios consolidados de Santiago. Visitas acompañadas, due diligence claro y acompañamiento hasta la firma.</p>
+            </div>
+            <div className="hero-meta">
+              <div className="hero-meta-item">
+                <div className="hero-meta-num">{properties.length || "—"}</div>
+                <div className="hero-meta-label">Propiedades activas</div>
+              </div>
+              <div className="hero-meta-item">
+                <div className="hero-meta-num">{comunas.length || "—"}</div>
+                <div className="hero-meta-label">Comunas</div>
+              </div>
+              <div className="hero-meta-item">
+                <div className="hero-meta-num">12 <span style={{ fontSize: 18, color: "var(--ink-3)" }}>años</span></div>
+                <div className="hero-meta-label">Operando</div>
+              </div>
+            </div>
+          </div>
+          <div className="hero-photo">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=1600&q=80" alt="Propiedad destacada" />
+            {featuredFirst && (
+              <div className="hero-photo-tag">
+                <span>DESTACADA · {featuredFirst.comuna.toUpperCase()}</span>
+                <strong>{featuredFirst.titulo}</strong>
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
+
+      {/* SEARCHBAR */}
+      <div className="searchbar">
+        <div className="searchbar-inner">
+          <div className="search-field">
+            <div className="search-field-label">Operación</div>
+            <select className="search-field-value" value={filters.operacion} onChange={(e) => setFilter("operacion", e.target.value)}>
+              <option value="todas">Venta o arriendo</option>
+              <option value="venta">Venta</option>
+              <option value="arriendo">Arriendo</option>
+            </select>
+          </div>
+          <div className="search-field">
+            <div className="search-field-label">Tipo</div>
+            <select className="search-field-value" value={filters.tipo} onChange={(e) => setFilter("tipo", e.target.value)}>
+              <option value="todos">Todos los tipos</option>
+              {Object.entries(TIPO_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            </select>
+          </div>
+          <div className="search-field">
+            <div className="search-field-label">Comuna</div>
+            <select className="search-field-value" value={filters.comuna} onChange={(e) => setFilter("comuna", e.target.value)}>
+              <option value="todas">Todas las comunas</option>
+              {comunas.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+          <div className="search-field">
+            <div className="search-field-label">Buscar</div>
+            <input className="search-field-value" placeholder="Ej. vista al parque, Las Condes…" value={filters.q} onChange={(e) => setFilter("q", e.target.value)} />
+          </div>
+          <button className="search-submit" onClick={scrollToProps}>
+            <IcSearch />Buscar
+          </button>
+        </div>
+      </div>
+
+      {/* FILTERS BAR */}
+      <div ref={propsRef} style={{ height: 88 }} />
+      <div className="filters-bar">
+        {[
+          { val: "todas", label: "Todas", count: properties.length },
+          { val: "venta", label: "Venta", count: properties.filter((p) => p.operacion === "venta").length },
+          { val: "arriendo", label: "Arriendo", count: properties.filter((p) => p.operacion === "arriendo").length },
+        ].map(({ val, label, count }) => (
+          <button key={val} className={`chip${filters.operacion === val ? " active" : ""}`} onClick={() => setFilter("operacion", val)}>
+            {label} <span className="chip-count">({count})</span>
+          </button>
+        ))}
+        <div className="filters-divider" />
+        {Object.entries(TIPO_LABEL).map(([v, l]) => {
+          const count = properties.filter((p) => p.tipo === v).length;
+          if (!count) return null;
+          return (
+            <button key={v} className={`chip${filters.tipo === v ? " active" : ""}`} onClick={() => setFilter("tipo", filters.tipo === v ? "todos" : v)}>
+              {l} <span className="chip-count">{count}</span>
+            </button>
+          );
+        })}
+        <div className="filters-divider" />
+        <button className={`chip${favs.length > 0 && filters.q === "__favs" ? " active" : ""}`}
+          onClick={() => setFilter("q", filters.q === "__favs" ? "" : "__favs")}>
+          <IcHeart s={12} /> Guardadas <span className="chip-count">({favs.length})</span>
+        </button>
+        <div className="view-toggle">
+          <button className="active"><IcGrid />Grilla</button>
+          <button onClick={scrollToProps}><IcMap />Mapa</button>
+        </div>
+      </div>
+
+      {/* PROPERTY GRID */}
+      <section className="section" style={{ paddingTop: 32 }}>
+        <div className="results-meta">
+          <div className="results-count">
+            <span>{filtered.length}</span> <em>propiedades</em>
+            {filters.comuna !== "todas" && <em> en {filters.comuna}</em>}
+          </div>
+          <div className="sort-by">
+            <span>Ordenar por</span>
+            <select value={sort} onChange={(e) => setSort(e.target.value)}>
+              <option value="destacadas">Destacadas primero</option>
+              <option value="precio-asc">Precio: menor a mayor</option>
+              <option value="precio-desc">Precio: mayor a menor</option>
+              <option value="metros-desc">Más metros²</option>
+            </select>
+          </div>
+        </div>
+        {filtered.length === 0 ? (
+          <div className="empty-state">
+            <div className="serif">Sin resultados</div>
+            <p>Prueba ajustar los filtros o busca por otra comuna.</p>
+          </div>
+        ) : (
+          <div className={`props-grid${featuredFirst && sort === "destacadas" ? " featured-row" : ""}`}>
+            {filtered.map((p, i) => (
+              <PropertyCard
+                key={p.id}
+                p={p}
+                featured={i === 0 && !!p.destacado && sort === "destacadas"}
+                onClick={() => setSelected(p)}
+                fav={favs.includes(p.id)}
+                onFav={toggleFav}
+              />
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* CALCULATOR */}
+      <div id="credito" />
+      <Calculator defaultPrice={featuredFirst?.precio || 200000000} />
+
+      {/* ABOUT */}
+      <section id="quienes" className="section">
+        <div className="about-grid">
+          <div>
+            <div className="eyebrow">Quiénes somos</div>
+            <h2 className="section-title" style={{ marginTop: 16 }}>
+              Doce años buscando el <em>lugar correcto</em> para cada cliente.
+            </h2>
+            <p style={{ marginTop: 24, fontSize: 16, color: "var(--ink-2)", lineHeight: 1.65, maxWidth: 520 }}>
+              Marlo nació en 2014 como un proyecto familiar: trabajar con menos propiedades, pero con mucho más detalle. Hoy somos un equipo pequeño de corredoras y corredores con experiencia en los barrios consolidados de Santiago.
+            </p>
+            <p style={{ marginTop: 16, fontSize: 16, color: "var(--ink-2)", lineHeight: 1.65, maxWidth: 520 }}>
+              Acompañamos cada operación de principio a fin: tasación, due diligence, negociación y firma. Sin venta cruzada, sin presión.
+            </p>
+            <div className="about-stats">
+              {[
+                { num: "340+", label: "Operaciones cerradas" },
+                { num: "11", label: "Comunas de cobertura" },
+                { num: "98%", label: "Clientes que recomendarían" },
+                { num: "2014", label: "Año de fundación" },
+              ].map(({ num, label }) => (
+                <div className="about-stat" key={label}>
+                  <div className="about-stat-num">{num}</div>
+                  <div className="about-stat-label">{label}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="about-img">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="https://images.unsplash.com/photo-1600880292203-757bb62b4baf?w=1200&q=80" alt="Equipo Marlo" />
+          </div>
+        </div>
+      </section>
+
+      {/* CONTACT */}
+      <section id="contacto" className="contact">
+        <div className="section contact-inner">
+          <div>
+            <div className="eyebrow">Hablemos</div>
+            <h2 className="section-title" style={{ marginTop: 16 }}>
+              ¿Tienes una propiedad <em>o estás buscando una?</em>
+            </h2>
+            <p style={{ marginTop: 20, fontSize: 16, color: "var(--ink-2)", maxWidth: 480 }}>
+              Cuéntanos qué necesitas y te respondemos en menos de 24 horas hábiles. Sin compromiso.
+            </p>
+            <div className="contact-info" style={{ marginTop: 36 }}>
+              {[
+                { k: "WhatsApp", v: "+56 9 7108 7515" },
+                { k: "Email", v: "contacto@marlopropiedades.cl" },
+                { k: "Oficina", v: "Santiago, Chile" },
+              ].map(({ k, v }) => (
+                <div className="contact-info-block" key={k}>
+                  <div className="k">{k}</div>
+                  <div className="v">{v}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <form className="contact-form" onSubmit={(e) => e.preventDefault()}>
+            <label>
+              <span className="eyebrow">Nombre</span>
+              <input type="text" placeholder="Tu nombre completo" />
+            </label>
+            <label>
+              <span className="eyebrow">Email</span>
+              <input type="email" placeholder="tucorreo@ejemplo.cl" />
+            </label>
+            <label>
+              <span className="eyebrow">Teléfono</span>
+              <input type="tel" placeholder="+56 9 ..." />
+            </label>
+            <label>
+              <span className="eyebrow">Te interesa</span>
+              <select>
+                <option>Comprar una propiedad</option>
+                <option>Arrendar</option>
+                <option>Vender o publicar mi propiedad</option>
+                <option>Tasación gratuita</option>
+              </select>
+            </label>
+            <label>
+              <span className="eyebrow">Mensaje</span>
+              <textarea placeholder="Cuéntanos en qué te podemos ayudar..." />
+            </label>
+            <button className="btn primary" type="submit" style={{ marginTop: 8, alignSelf: "flex-start", padding: "14px 32px" }}>
+              Enviar consulta <IcArrow s={14} />
+            </button>
+          </form>
+        </div>
+      </section>
+
+      {/* FOOTER */}
+      <footer className="footer">
+        <div className="footer-grid">
+          <div>
+            <div className="logo">
+              <span className="logo-mark">Marlo<em>.</em></span>
+              <span className="logo-sub">Propiedades</span>
+            </div>
+            <div className="footer-tagline" style={{ marginTop: 24 }}>
+              Encontrar dónde vivir, <em>despacio.</em>
+            </div>
+          </div>
+          <div className="footer-col">
+            <h4>Propiedades</h4>
+            <ul>
+              <li><a onClick={scrollToProps} style={{ cursor: "pointer" }}>Venta</a></li>
+              <li><a onClick={scrollToProps} style={{ cursor: "pointer" }}>Arriendo</a></li>
+              <li><a onClick={scrollToProps} style={{ cursor: "pointer" }}>Destacadas</a></li>
+            </ul>
+          </div>
+          <div className="footer-col">
+            <h4>Marlo</h4>
+            <ul>
+              <li><a onClick={() => document.getElementById("quienes")?.scrollIntoView({ behavior: "smooth" })} style={{ cursor: "pointer" }}>Quiénes somos</a></li>
+              <li><a onClick={() => document.getElementById("contacto")?.scrollIntoView({ behavior: "smooth" })} style={{ cursor: "pointer" }}>Contacto</a></li>
+              <li><a onClick={() => document.getElementById("credito")?.scrollIntoView({ behavior: "smooth" })} style={{ cursor: "pointer" }}>Simulador</a></li>
+              <li><a href="/admin">Acceso corredores</a></li>
+            </ul>
+          </div>
+          <div className="footer-col">
+            <h4>Legal</h4>
+            <ul>
+              <li><a href="#">Términos</a></li>
+              <li><a href="#">Privacidad</a></li>
+            </ul>
+          </div>
+        </div>
+        <div className="footer-bottom">
+          <span>© {new Date().getFullYear()} Marlo Propiedades SpA · Santiago, Chile</span>
+          <span>Hecho con cuidado</span>
+        </div>
+      </footer>
+
+      {/* WHATSAPP FAB */}
+      <a className="wsp-fab" href="https://wa.me/56971087515?text=Hola%20Marlo%2C%20tengo%20una%20consulta" target="_blank" rel="noopener noreferrer" aria-label="WhatsApp">
+        <span className="wsp-fab-tip">Escríbenos</span>
+        <IcWsp s={26} />
+      </a>
+
+      {/* DETAIL MODAL */}
+      {selected && (
+        <PropertyDetail
+          p={selected}
+          onClose={() => setSelected(null)}
+          fav={favs.includes(selected.id)}
+          onFav={toggleFav}
+        />
+      )}
+    </>
   );
 }
