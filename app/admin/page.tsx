@@ -236,10 +236,26 @@ function PropertyForm({ initial, onSave, onCancel, saving, msg }: {
         {imgs.length > 0 && (
           <div className="images-grid">
             {imgs.map((url, i) => (
-              <div className="image-thumb" key={i}>
+              <div
+                className="image-thumb"
+                key={url}
+                draggable
+                onDragStart={(e) => e.dataTransfer.setData("text/plain", String(i))}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  const from = Number(e.dataTransfer.getData("text/plain"));
+                  if (from === i) return;
+                  const arr = [...imgs];
+                  arr.splice(i, 0, arr.splice(from, 1)[0]);
+                  set("imagenes", arr.join(";"));
+                }}
+                style={{ cursor: "grab" }}
+              >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={url} alt={`Foto ${i + 1}`} />
                 {i === 0 && <div className="image-thumb-cover">Portada</div>}
+                <div className="image-thumb-num">{i + 1}</div>
                 <div className="image-thumb-actions">
                   <button className="btn ghost" style={{ padding: "6px 10px", fontSize: 11 }}
                     onClick={() => { const a = imgs.filter((_, j) => j !== i); set("imagenes", a.join(";")); }}>

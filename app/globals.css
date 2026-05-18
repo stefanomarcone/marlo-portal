@@ -383,6 +383,7 @@ img { display: block; max-width: 100%; }
 .image-thumb-actions { position: absolute; inset: 0; background: rgba(20,19,15,0.5); display: flex; align-items: center; justify-content: center; gap: 8px; opacity: 0; transition: opacity 0.15s; }
 .image-thumb:hover .image-thumb-actions { opacity: 1; }
 .image-thumb-cover { position: absolute; top: 6px; left: 6px; background: var(--ink); color: var(--bg); font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.08em; padding: 3px 6px; text-transform: uppercase; }
+.image-thumb-num { position: absolute; bottom: 6px; right: 6px; background: rgba(20,19,15,0.6); color: #fff; font-family: var(--font-mono); font-size: 10px; font-weight: 600; padding: 2px 6px; border-radius: 2px; pointer-events: none; }
 .images-dropzone { border: 1px dashed var(--line); padding: 32px; text-align: center; cursor: pointer; transition: border-color 0.15s; }
 .images-dropzone:hover { border-color: var(--ink-3); }
 .images-dropzone .eyebrow { margin-bottom: 8px; }

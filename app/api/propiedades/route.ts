@@ -1,6 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 
+export const runtime = "nodejs";
+
 function adminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://swhoyyqcrrnetrqntimn.supabase.co";
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
