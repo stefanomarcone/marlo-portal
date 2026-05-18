@@ -4,14 +4,14 @@ import { supabase } from "../../src/lib/supabase";
 
 interface Property {
   id: number; titulo: string; operacion: string; precio: number; tipo: string;
-  dormitorios: number; banos: number; metros: number; comuna: string; ciudad: string;
+  dormitorios: number; banos: number; metros: number; metros_terreno: number; comuna: string; ciudad: string;
   direccion: string; gastos_comunes: number; estacionamientos: number; bodega: boolean;
   destacado: boolean; imagenes: string; descripcion: string; etiquetas: string;
 }
 
 const empty: Omit<Property, "id"> = {
   titulo: "", operacion: "venta", precio: 0, tipo: "departamento",
-  dormitorios: 0, banos: 0, metros: 0, comuna: "", ciudad: "Santiago",
+  dormitorios: 0, banos: 0, metros: 0, metros_terreno: 0, comuna: "", ciudad: "Santiago",
   direccion: "", gastos_comunes: 0, estacionamientos: 0, bodega: false,
   destacado: false, imagenes: "", descripcion: "", etiquetas: "",
 };
@@ -167,8 +167,12 @@ function PropertyForm({ initial, onSave, onCancel, saving, msg }: {
             <input type="number" min="0" value={form.banos || ""} onChange={(e) => set("banos", Number(e.target.value))} placeholder="0" />
           </div>
           <div className="form-field">
-            <label>m² útiles *</label>
+            <label>m² construidos *</label>
             <input type="number" min="0" value={form.metros || ""} onChange={(e) => set("metros", Number(e.target.value))} placeholder="60" />
+          </div>
+          <div className="form-field">
+            <label>m² terreno</label>
+            <input type="number" min="0" value={form.metros_terreno || ""} onChange={(e) => set("metros_terreno", Number(e.target.value))} placeholder="0" />
           </div>
           <div className="form-field">
             <label>Estacionamientos</label>

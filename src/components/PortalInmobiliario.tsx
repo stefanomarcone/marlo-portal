@@ -11,6 +11,7 @@ interface Property {
   dormitorios: number;
   banos: number;
   metros: number;
+  metros_terreno: number;
   comuna: string;
   ciudad: string;
   direccion: string;
@@ -252,8 +253,14 @@ function PropertyDetail({ p, onClose, fav, onFav }: {
               )}
               <div className="detail-spec">
                 <div className="detail-spec-num">{fmtN(p.metros)}</div>
-                <div className="detail-spec-label">m² totales</div>
+                <div className="detail-spec-label">m² construidos</div>
               </div>
+              {p.metros_terreno > 0 && (
+                <div className="detail-spec">
+                  <div className="detail-spec-num">{fmtN(p.metros_terreno)}</div>
+                  <div className="detail-spec-label">m² terreno</div>
+                </div>
+              )}
               {p.estacionamientos > 0 && (
                 <div className="detail-spec">
                   <div className="detail-spec-num">{p.estacionamientos}</div>
@@ -298,7 +305,8 @@ function PropertyDetail({ p, onClose, fav, onFav }: {
             <div className="detail-meta-list">
               <div className="detail-meta-row"><span className="k">Tipo</span><span className="v">{TIPO_LABEL[p.tipo] || p.tipo}</span></div>
               <div className="detail-meta-row"><span className="k">Operación</span><span className="v">{p.operacion === "venta" ? "Venta" : "Arriendo"}</span></div>
-              <div className="detail-meta-row"><span className="k">Superficie</span><span className="v">{fmtN(p.metros)} m²</span></div>
+              <div className="detail-meta-row"><span className="k">m² construidos</span><span className="v">{fmtN(p.metros)} m²</span></div>
+              {p.metros_terreno > 0 && <div className="detail-meta-row"><span className="k">m² terreno</span><span className="v">{fmtN(p.metros_terreno)} m²</span></div>}
               {p.gastos_comunes > 0 && <div className="detail-meta-row"><span className="k">GG.CC.</span><span className="v">{fmtCLP(p.gastos_comunes)}</span></div>}
               <div className="detail-meta-row"><span className="k">Bodega</span><span className="v">{p.bodega ? "Sí" : "No"}</span></div>
               {p.estacionamientos > 0 && <div className="detail-meta-row"><span className="k">Estacionamientos</span><span className="v">{p.estacionamientos}</span></div>}
