@@ -114,7 +114,28 @@ function PropertyForm({ initial, onSave, onCancel, saving, msg }: {
 }) {
   const [form, setForm] = useState(initial);
   const set = (k: string, v: unknown) => setForm((p) => ({ ...p, [k]: v }));
+  const [uploading, setUploading] = useState(false);
+  const [uploadErr, setUploadErr] = useState("");
   const imgs = form.imagenes ? form.imagenes.split(";").filter(Boolean) : [];
+
+  const handleFiles = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    setUploading(true); setUploadErr("");
+    const newUrls: string[] = [];
+    for (const file of Array.from(files)) {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/upload", { method: "POST", body: fd });
+      const data = await res.json();
+      if (data.url) newUrls.push(data.url);
+      else { setUploadErr("Error subiendo " + file.name + ": " + (data.error || "desconocido")); }
+    }
+    if (newUrls.length > 0) {
+      const current = form.imagenes ? form.imagenes.split(";").filter(Boolean) : [];
+      set("imagenes", [...current, ...newUrls].join(";"));
+    }
+    setUploading(false);
+  };
 
   return (
     <div className="admin-form">
@@ -201,12 +222,15 @@ function PropertyForm({ initial, onSave, onCancel, saving, msg }: {
       {/* Fotos */}
       <div className="form-section">
         <div className="form-section-title">Fotos</div>
-        <div className="form-field">
-          <label>URLs de imágenes (separadas por ;)</label>
-          <textarea value={form.imagenes} onChange={(e) => set("imagenes", e.target.value)}
-            placeholder="https://ejemplo.com/foto1.jpg;https://ejemplo.com/foto2.jpg"
-            style={{ minHeight: 80, fontFamily: "var(--font-mono)", fontSize: 12 }} />
-        </div>
+        <label className="upload-drop" onDragOver={(e) => e.preventDefault()}
+          onDrop={(e) => { e.preventDefault(); handleFiles(e.dataTransfer.files); }}>
+          <input type="file" accept="image/*" multiple style={{ display: "none" }}
+            onChange={(e) => handleFiles(e.target.files)} />
+          <Ic.upload />
+          <span>{uploading ? "Subiendo…" : "Arrastra fotos aquí o haz clic para seleccionar"}</span>
+          <span style={{ fontSize: 11, color: "var(--ink-3)" }}>JPG, PNG, WEBP · máx 10MB por foto</span>
+        </label>
+        {uploadErr && <div className="login-error" style={{ marginTop: 8 }}>{uploadErr}</div>}
         {imgs.length > 0 && (
           <div className="images-grid">
             {imgs.map((url, i) => (
