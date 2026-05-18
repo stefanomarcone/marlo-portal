@@ -6,12 +6,12 @@ interface Property {
   id: number; titulo: string; operacion: string; precio: number; tipo: string;
   dormitorios: number; banos: number; metros: number; metros_terreno: number; comuna: string; ciudad: string;
   direccion: string; gastos_comunes: number; estacionamientos: number; bodega: boolean;
-  destacado: boolean; imagenes: string; descripcion: string; etiquetas: string;
+  destacado: boolean; activa: boolean; imagenes: string; descripcion: string; etiquetas: string;
 }
 
 const empty: Omit<Property, "id"> = {
   titulo: "", operacion: "venta", precio: 0, tipo: "departamento",
-  dormitorios: 0, banos: 0, metros: 0, metros_terreno: 0, comuna: "", ciudad: "Santiago",
+  dormitorios: 0, banos: 0, metros: 0, metros_terreno: 0, activa: true, comuna: "", ciudad: "Santiago",
   direccion: "", gastos_comunes: 0, estacionamientos: 0, bodega: false,
   destacado: false, imagenes: "", descripcion: "", etiquetas: "",
 };
@@ -31,6 +31,8 @@ const Ic = {
   trash: () => <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M4 7h16M9 7V5a1 1 0 011-1h4a1 1 0 011 1v2M6 7l1 12a2 2 0 002 2h6a2 2 0 002-2l1-12" /></svg>,
   star: ({ filled }: { filled?: boolean }) => <svg width={14} height={14} viewBox="0 0 24 24" fill={filled ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"><path d="M12 3l2.9 5.9 6.6 1-4.7 4.7 1.1 6.5L12 18l-5.9 3.1 1.1-6.5L2.5 9.9l6.6-1L12 3z" /></svg>,
   logout: () => <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M15 4h4a1 1 0 011 1v14a1 1 0 01-1 1h-4M10 17l-5-5 5-5M5 12h12" /></svg>,
+  pause: () => <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>,
+  play: () => <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>,
   search: () => <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="11" cy="11" r="6" /><path d="M16 16l4 4" /></svg>,
   arrow: () => <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M5 12h14M13 6l6 6-6 6" /></svg>,
   x: () => <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M6 6l12 12M18 6L6 18" /></svg>,
@@ -304,6 +306,7 @@ function Sidebar({ view, setView, count, user, onLogout }: {
   const items = [
     { id: "dashboard", label: "Dashboard", icon: <Ic.home /> },
     { id: "list", label: "Propiedades", icon: <Ic.list />, count },
+    { id: "paused", label: "Pausadas", icon: <Ic.pause /> },
     { id: "new", label: "Crear nueva", icon: <Ic.plus /> },
   ];
   return (
@@ -403,18 +406,22 @@ function DashboardView({ properties, setView }: { properties: Property[]; setVie
 }
 
 /* ---- List View ---- */
-function ListView({ properties, onEdit, onToggleStar, onDelete, setView }: {
+function ListView({ properties, onEdit, onToggleStar, onToggleActive, onDelete, setView, pausedOnly = false }: {
   properties: Property[];
   onEdit: (p: Property) => void;
   onToggleStar: (p: Property) => void;
+  onToggleActive: (p: Property) => void;
   onDelete: (p: Property) => void;
   setView: (v: string) => void;
+  pausedOnly?: boolean;
 }) {
   const [q, setQ] = useState("");
   const [op, setOp] = useState("todas");
   const [tipo, setTipo] = useState("todos");
 
   const filtered = useMemo(() => properties.filter((p) => {
+    if (pausedOnly && p.activa !== false) return false;
+    if (!pausedOnly && p.activa === false) return false;
     if (op !== "todas" && p.operacion !== op) return false;
     if (tipo !== "todos" && p.tipo !== tipo) return false;
     if (q && !p.titulo.toLowerCase().includes(q.toLowerCase()) && !p.comuna.toLowerCase().includes(q.toLowerCase())) return false;
@@ -483,6 +490,9 @@ function ListView({ properties, onEdit, onToggleStar, onDelete, setView }: {
                   <div className="admin-actions">
                     <button className="admin-icon-btn" onClick={() => onToggleStar(p)} title={p.destacado ? "Quitar destacada" : "Destacar"}>
                       <Ic.star filled={p.destacado} />
+                    </button>
+                    <button className="admin-icon-btn" onClick={() => onToggleActive(p)} title={p.activa !== false ? "Pausar" : "Activar"} style={{ color: p.activa === false ? "var(--ink-3)" : undefined }}>
+                      {p.activa === false ? <Ic.play /> : <Ic.pause />}
                     </button>
                     <button className="admin-icon-btn" onClick={() => onEdit(p)} title="Editar"><Ic.edit /></button>
                     <button className="admin-icon-btn danger" onClick={() => onDelete(p)} title="Eliminar"><Ic.trash /></button>
@@ -558,6 +568,13 @@ export default function AdminPage() {
     showToast(p.destacado ? "Propiedad desmarcada" : "Propiedad destacada");
   };
 
+  const handleToggleActive = async (p: Property) => {
+    const activa = p.activa === false ? true : false;
+    await fetch("/api/propiedades", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: p.id, activa }) });
+    loadProps();
+    showToast(activa ? "Propiedad activada" : "Propiedad pausada — no se ve en el portal");
+  };
+
   if (!user) return <LoginScreen onLogin={() => { setUser({ email: "arriendos@marlopropiedades.cl" }); loadProps(); }} />;
 
   const formInitial = editing ? { ...editing } : { ...empty };
@@ -574,13 +591,15 @@ export default function AdminPage() {
 
       {view === "dashboard" && <DashboardView properties={properties} setView={setView} />}
 
-      {view === "list" && (
+      {(view === "list" || view === "paused") && (
         <ListView
           properties={properties}
           onEdit={(p) => { setEditing(p); setView("edit"); }}
           onToggleStar={handleToggleStar}
+          onToggleActive={handleToggleActive}
           onDelete={setConfirmDel}
           setView={setView}
+          pausedOnly={view === "paused"}
         />
       )}
 

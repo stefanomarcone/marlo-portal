@@ -12,6 +12,7 @@ interface Property {
   banos: number;
   metros: number;
   metros_terreno: number;
+  activa: boolean;
   comuna: string;
   ciudad: string;
   direccion: string;
@@ -406,6 +407,7 @@ export default function PortalInmobiliario() {
 
   useEffect(() => {
     supabase.from("propiedades").select("*")
+      .neq("activa", false)
       .order("destacado", { ascending: false })
       .order("created_at", { ascending: false })
       .then(({ data }) => { if (data) setProperties(data); });
