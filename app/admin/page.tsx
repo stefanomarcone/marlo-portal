@@ -170,10 +170,12 @@ function PropertyForm({ initial, onSave, onCancel, saving, msg }: {
             <label>m² construidos *</label>
             <input type="number" min="0" value={form.metros || ""} onChange={(e) => set("metros", Number(e.target.value))} placeholder="60" />
           </div>
-          <div className="form-field">
-            <label>m² terreno</label>
-            <input type="number" min="0" value={form.metros_terreno || ""} onChange={(e) => set("metros_terreno", Number(e.target.value))} placeholder="0" />
-          </div>
+          {form.tipo === "casa" && (
+            <div className="form-field">
+              <label>m² terreno</label>
+              <input type="number" min="0" value={form.metros_terreno || ""} onChange={(e) => set("metros_terreno", Number(e.target.value))} placeholder="0" />
+            </div>
+          )}
           <div className="form-field">
             <label>Estacionamientos</label>
             <input type="number" min="0" value={form.estacionamientos || ""} onChange={(e) => set("estacionamientos", Number(e.target.value))} placeholder="0" />
