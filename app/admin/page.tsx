@@ -526,8 +526,8 @@ export default function AdminPage() {
   }, []);
 
   const loadProps = async () => {
-    const { data } = await supabase.from("propiedades").select("*").order("created_at", { ascending: false });
-    if (data) setProperties(data);
+    const res = await fetch("/api/propiedades");
+    if (res.ok) { const data = await res.json(); setProperties(data); }
   };
 
   const showToast = (text: string, ok = true) => {
@@ -537,26 +537,23 @@ export default function AdminPage() {
 
   const handleSave = async (form: Omit<Property, "id"> & { id?: number }) => {
     setSaving(true); setMsg("");
-    if (form.id) {
-      const { error } = await supabase.from("propiedades").update(form).eq("id", form.id);
-      if (error) { setMsg("Error: " + error.message); } else { showToast("Propiedad actualizada"); setView("list"); loadProps(); }
-    } else {
-      const { id: _id, ...data } = form as Property;
-      void _id;
-      const { error } = await supabase.from("propiedades").insert([data]);
-      if (error) { setMsg("Error: " + error.message); } else { showToast("Propiedad publicada"); setView("list"); loadProps(); }
-    }
+    const method = form.id ? "PUT" : "POST";
+    const { id: _id, ...rest } = form as Property; void _id;
+    const body = form.id ? form : rest;
+    const res = await fetch("/api/propiedades", { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const json = await res.json();
+    if (!res.ok) { setMsg("Error: " + (json.error || "desconocido")); }
+    else { showToast(form.id ? "Propiedad actualizada" : "Propiedad publicada"); setView("list"); loadProps(); }
     setSaving(false);
   };
 
   const handleDelete = async (p: Property) => {
-    const { error } = await supabase.from("propiedades").delete().eq("id", p.id);
-    if (!error) { showToast("Propiedad eliminada"); loadProps(); }
-    setConfirmDel(null);
+    await fetch("/api/propiedades", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: p.id }) });
+    showToast("Propiedad eliminada"); loadProps(); setConfirmDel(null);
   };
 
   const handleToggleStar = async (p: Property) => {
-    await supabase.from("propiedades").update({ destacado: !p.destacado }).eq("id", p.id);
+    await fetch("/api/propiedades", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: p.id, destacado: !p.destacado }) });
     loadProps();
     showToast(p.destacado ? "Propiedad desmarcada" : "Propiedad destacada");
   };
