@@ -691,7 +691,7 @@ export default function PortalInmobiliario() {
               {[
                 { k: "WhatsApp", v: "+56 9 7108 7515" },
                 { k: "Email", v: "contacto@marlopropiedades.cl" },
-                { k: "Oficina", v: "Santiago, Chile" },
+                { k: "Oficina", v: "Reñaca, Chile" },
               ].map(({ k, v }) => (
                 <div className="contact-info-block" key={k}>
                   <div className="k">{k}</div>
@@ -771,7 +771,7 @@ export default function PortalInmobiliario() {
           </div>
         </div>
         <div className="footer-bottom">
-          <span>© {new Date().getFullYear()} Marlo Propiedades SpA · Santiago, Chile</span>
+          <span>© {new Date().getFullYear()} Marlo Propiedades SpA · Reñaca, Chile</span>
           <span>Hecho con cuidado</span>
         </div>
       </footer>
