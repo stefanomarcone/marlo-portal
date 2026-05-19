@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { supabase } from "../../src/lib/supabase";
 
 interface Property {
@@ -100,6 +100,88 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
             <div className="login-side-quote">Publica con calma.<br /><em>Cada propiedad merece tiempo.</em></div>
           </div>
           <div className="login-side-meta">arriendos@marlopropiedades.cl</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---- Address Autocomplete ---- */
+interface NominatimResult { display_name: string; address: { road?: string; house_number?: string; suburb?: string; city?: string; town?: string; municipality?: string; state?: string; } }
+
+function AddressSection({ form, set }: { form: Record<string, unknown>; set: (k: string, v: unknown) => void }) {
+  const [query, setQuery] = useState(String(form.direccion || ""));
+  const [suggestions, setSuggestions] = useState<NominatimResult[]>([]);
+  const [open, setOpen] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  const search = useCallback((q: string) => {
+    if (q.length < 4) { setSuggestions([]); return; }
+    fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q + ", Chile")}&format=json&addressdetails=1&limit=6&accept-language=es`)
+      .then((r) => r.json())
+      .then((data: NominatimResult[]) => { setSuggestions(data); setOpen(true); })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => search(query), 450);
+    return () => { if (timerRef.current) clearTimeout(timerRef.current); };
+  }, [query, search]);
+
+  // close on click outside
+  useEffect(() => {
+    const handler = (e: MouseEvent) => { if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const pick = (r: NominatimResult) => {
+    const a = r.address;
+    const street = [a.road, a.house_number].filter(Boolean).join(" ");
+    const comuna = a.suburb || a.municipality || "";
+    const ciudad = a.city || a.town || a.municipality || "";
+    const short = street || r.display_name.split(",")[0];
+    setQuery(short);
+    set("direccion", short);
+    if (comuna) set("comuna", comuna);
+    if (ciudad) set("ciudad", ciudad);
+    setSuggestions([]); setOpen(false);
+  };
+
+  return (
+    <div className="form-section">
+      <div className="form-section-title">Ubicación</div>
+      <div className="form-grid">
+        <div className="form-field span-2" style={{ position: "relative" }} ref={wrapRef}>
+          <label>Dirección *</label>
+          <input
+            value={query}
+            onChange={(e) => { setQuery(e.target.value); set("direccion", e.target.value); }}
+            onFocus={() => suggestions.length > 0 && setOpen(true)}
+            placeholder="Av. Providencia 1234, Depto 501"
+            autoComplete="off"
+          />
+          {open && suggestions.length > 0 && (
+            <ul style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 99, background: "var(--bg-card)", border: "1px solid var(--line)", listStyle: "none", margin: 0, padding: 0, boxShadow: "0 8px 24px rgba(20,19,15,0.1)", maxHeight: 240, overflowY: "auto" }}>
+              {suggestions.map((r, i) => (
+                <li key={i} onMouseDown={() => pick(r)} style={{ padding: "10px 14px", fontSize: 13, cursor: "pointer", borderBottom: "1px solid var(--line-2)", lineHeight: 1.4 }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-warm)")}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = "")}>
+                  {r.display_name}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+        <div className="form-field">
+          <label>Comuna *</label>
+          <input value={String(form.comuna || "")} onChange={(e) => set("comuna", e.target.value)} placeholder="Providencia" />
+        </div>
+        <div className="form-field">
+          <label>Ciudad</label>
+          <input value={String(form.ciudad || "")} onChange={(e) => set("ciudad", e.target.value)} placeholder="Santiago" />
         </div>
       </div>
     </div>
@@ -269,23 +351,7 @@ function PropertyForm({ initial, onSave, onCancel, saving, msg }: {
       </div>
 
       {/* Ubicación */}
-      <div className="form-section">
-        <div className="form-section-title">Ubicación</div>
-        <div className="form-grid">
-          <div className="form-field span-2">
-            <label>Dirección *</label>
-            <input value={form.direccion} onChange={(e) => set("direccion", e.target.value)} placeholder="Av. Providencia 1234, Depto 501" />
-          </div>
-          <div className="form-field">
-            <label>Comuna *</label>
-            <input value={form.comuna} onChange={(e) => set("comuna", e.target.value)} placeholder="Providencia" />
-          </div>
-          <div className="form-field">
-            <label>Ciudad</label>
-            <input value={form.ciudad} onChange={(e) => set("ciudad", e.target.value)} placeholder="Santiago" />
-          </div>
-        </div>
-      </div>
+      <AddressSection form={form} set={set} />
 
       {/* Publicación */}
       <div className="form-section">

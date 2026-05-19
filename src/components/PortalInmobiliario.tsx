@@ -277,11 +277,14 @@ function PropertyDetail({ p, onClose, fav, onFav }: {
             )}
             <div className="detail-section">
               <h3>Ubicación</h3>
-              <div style={{ position: "relative", aspectRatio: "16/9", background: "var(--bg-warm)", border: "1px solid var(--line)", overflow: "hidden" }}>
-                <div style={{ position: "absolute", inset: 0, backgroundImage: "linear-gradient(90deg, var(--line-2) 1px, transparent 1px),linear-gradient(0deg, var(--line-2) 1px, transparent 1px)", backgroundSize: "32px 32px" }} />
-                <div style={{ position: "absolute", left: "50%", top: "50%", transform: "translate(-50%,-100%)", fontFamily: "var(--font-mono)", fontSize: 12, padding: "6px 10px", background: "var(--ink)", color: "var(--bg)", display: "flex", alignItems: "center", gap: 4 }}>
-                  <IcPin />{p.direccion}
-                </div>
+              <div style={{ position: "relative", aspectRatio: "16/9", border: "1px solid var(--line)", overflow: "hidden", borderRadius: "var(--radius)" }}>
+                <iframe
+                  src={`https://maps.google.com/maps?q=${encodeURIComponent(`${p.direccion}, ${p.comuna}, ${p.ciudad}, Chile`)}&output=embed&z=15`}
+                  style={{ width: "100%", height: "100%", border: 0 }}
+                  loading="lazy"
+                  referrerPolicy="no-referrer-when-downgrade"
+                  title="Ubicación de la propiedad"
+                />
               </div>
             </div>
           </div>
