@@ -509,8 +509,8 @@ export default function PortalInmobiliario() {
                 <div className="hero-meta-label">Propiedades activas</div>
               </div>
               <div className="hero-meta-item">
-                <div className="hero-meta-num">{comunas.length || "—"}</div>
-                <div className="hero-meta-label">Comunas</div>
+                <div className="hero-meta-num">2</div>
+                <div className="hero-meta-label">Regiones</div>
               </div>
               <div className="hero-meta-item">
                 <div className="hero-meta-num">12 <span style={{ fontSize: 18, color: "var(--ink-3)" }}>años</span></div>
