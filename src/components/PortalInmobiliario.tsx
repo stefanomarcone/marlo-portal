@@ -647,13 +647,13 @@ export default function PortalInmobiliario() {
           <div>
             <div className="eyebrow">Quiénes somos</div>
             <h2 className="section-title" style={{ marginTop: 16 }}>
-              Doce años buscando el <em>lugar correcto</em> para cada cliente.
+              Doce años acompañando cada propiedad con <em>confianza.</em>
             </h2>
             <p style={{ marginTop: 24, fontSize: 16, color: "var(--ink-2)", lineHeight: 1.65, maxWidth: 520 }}>
-              Marlo nació en 2014 como un proyecto familiar: trabajar con menos propiedades, pero con mucho más detalle. Hoy somos un equipo pequeño de corredoras y corredores con experiencia en los barrios consolidados de Santiago.
+              MARLO Propiedades nace como un proyecto familiar, con una forma de trabajo cercana, detallista y transparente. Desde 2014 acompañamos a personas y familias en la compra, venta y arriendo de propiedades, cuidando cada etapa del proceso.
             </p>
             <p style={{ marginTop: 16, fontSize: 16, color: "var(--ink-2)", lineHeight: 1.65, maxWidth: 520 }}>
-              Acompañamos cada operación de principio a fin: tasación, due diligence, negociación y firma. Sin venta cruzada, sin presión.
+              Trabajamos con un enfoque personalizado: tasación, difusión, visitas, negociación, revisión documental y acompañamiento hasta la firma. Nuestro compromiso es que cada cliente tome decisiones seguras, sin presión y con información clara.
             </p>
             <div className="about-stats">
               {[
