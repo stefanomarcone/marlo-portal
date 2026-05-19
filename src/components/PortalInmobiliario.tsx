@@ -491,7 +491,7 @@ export default function PortalInmobiliario() {
             <div>
               <div className="hero-eyebrow">Marlo Propiedades · est. 2014</div>
               <h1 className="hero-title">Encontrar dónde<br />vivir, <em>despacio.</em></h1>
-              <p className="hero-desc">Curamos propiedades en barrios consolidados de Santiago. Visitas acompañadas, due diligence claro y acompañamiento hasta la firma.</p>
+              <p className="hero-desc">Encuentra tu próxima propiedad con confianza. Te acompañamos en cada etapa del proceso: búsqueda, visitas, negociación, documentación y cierre. Propiedades seleccionadas con asesoría clara hasta la firma.</p>
             </div>
             <div className="hero-meta">
               <div className="hero-meta-item">
