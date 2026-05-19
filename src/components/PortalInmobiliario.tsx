@@ -359,7 +359,17 @@ function Calculator({ defaultPrice }: { defaultPrice: number }) {
             <div className="calc-label">Valor de la propiedad</div>
             <div className="calc-input">
               <span className="currency">$</span>
-              <input type="number" value={price} onChange={(e) => setPrice(Number(e.target.value))} />
+              <input
+                type="text"
+                inputMode="numeric"
+                value={price.toLocaleString("es-CL")}
+                onChange={(e) => {
+                  const raw = e.target.value.replace(/\./g, "").replace(/[^0-9]/g, "");
+                  if (raw === "") { setPrice(0); return; }
+                  const n = Number(raw);
+                  if (!isNaN(n)) setPrice(n);
+                }}
+              />
             </div>
             <input type="range" className="calc-slider" min={50000000} max={800000000} step={5000000} value={price} onChange={(e) => setPrice(Number(e.target.value))} />
             <div className="calc-slider-meta"><span>$50M</span><span>$800M</span></div>
