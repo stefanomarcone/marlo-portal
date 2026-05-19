@@ -745,7 +745,7 @@ export default function PortalInmobiliario() {
               <span className="logo-sub">Propiedades</span>
             </div>
             <div className="footer-tagline" style={{ marginTop: 24 }}>
-              Encontrar dónde vivir, <em>despacio.</em>
+              Encuentra tu próxima propiedad con <em>confianza.</em>
             </div>
           </div>
           <div className="footer-col">
