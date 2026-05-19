@@ -657,7 +657,7 @@ export default function PortalInmobiliario() {
             </p>
             <div className="about-stats">
               {[
-                { num: "340+", label: "Operaciones cerradas" },
+                { num: "56", label: "Operaciones cerradas" },
                 { num: "11", label: "Comunas de cobertura" },
                 { num: "98%", label: "Clientes que recomendarían" },
                 { num: "2014", label: "Año de fundación" },
