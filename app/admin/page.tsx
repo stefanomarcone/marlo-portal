@@ -3,20 +3,25 @@ import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { supabase } from "../../src/lib/supabase";
 
 interface Property {
-  id: number; titulo: string; operacion: string; precio: number; tipo: string;
+  id: number; titulo: string; operacion: string; precio: number; moneda: string; tipo: string;
   dormitorios: number; banos: number; metros: number; metros_terreno: number; comuna: string; ciudad: string;
   direccion: string; gastos_comunes: number; estacionamientos: number; bodega: boolean;
   destacado: boolean; activa: boolean; imagenes: string; descripcion: string; etiquetas: string;
 }
 
 const empty: Omit<Property, "id"> = {
-  titulo: "", operacion: "venta", precio: 0, tipo: "departamento",
+  titulo: "", operacion: "venta", precio: 0, moneda: "clp", tipo: "departamento",
   dormitorios: 0, banos: 0, metros: 0, metros_terreno: 0, activa: true, comuna: "", ciudad: "Santiago",
   direccion: "", gastos_comunes: 0, estacionamientos: 0, bodega: false,
   destacado: false, imagenes: "", descripcion: "", etiquetas: "",
 };
 
 const fmtCLP = (n: number) => "$" + n.toLocaleString("es-CL").replace(/,/g, ".");
+const fmtPrecio = (p: { precio: number; moneda?: string }) => {
+  if (!p.precio && p.precio !== 0) return "—";
+  if (p.moneda === "uf") return p.precio.toLocaleString("es-CL", { maximumFractionDigits: 0 }) + " UF";
+  return fmtCLP(p.precio);
+};
 
 const TIPOS = ["departamento", "casa", "oficina", "parcela", "terreno", "local"];
 const TIPO_LABEL: Record<string, string> = { departamento: "Departamento", casa: "Casa", oficina: "Oficina", parcela: "Parcela", terreno: "Terreno", local: "Local comercial" };
@@ -245,8 +250,14 @@ function PropertyForm({ initial, onSave, onCancel, saving, msg }: {
             </select>
           </div>
           <div className="form-field">
-            <label>Precio (CLP) *</label>
-            <input type="number" value={form.precio || ""} onChange={(e) => set("precio", Number(e.target.value))} placeholder="85000000" />
+            <label>Precio *</label>
+            <div style={{ display: "flex", gap: 6 }}>
+              <input type="number" value={form.precio || ""} onChange={(e) => set("precio", Number(e.target.value))} placeholder={form.moneda === "uf" ? "3500" : "85000000"} style={{ flex: 1 }} />
+              <select value={form.moneda || "clp"} onChange={(e) => set("moneda", e.target.value)} style={{ width: 80 }}>
+                <option value="clp">CLP</option>
+                <option value="uf">UF</option>
+              </select>
+            </div>
           </div>
           <div className="form-field">
             <label>Gastos comunes (CLP)</label>
@@ -471,7 +482,7 @@ function DashboardView({ properties, setView }: { properties: Property[]; setVie
                 <div className="admin-prop-title">{p.titulo}</div>
                 <div className="admin-prop-meta">{p.comuna} · {TIPO_LABEL[p.tipo]}</div>
               </div>
-              <div style={{ fontFamily: "var(--font-mono)", fontSize: 13 }}>{fmtCLP(p.precio)}</div>
+              <div style={{ fontFamily: "var(--font-mono)", fontSize: 13 }}>{fmtPrecio(p)}</div>
               {p.destacado && <span className="admin-badge destacada">★</span>}
             </div>
           ))}
@@ -561,7 +572,7 @@ function ListView({ properties, onEdit, onToggleStar, onToggleActive, onDelete, 
                   <div className="admin-prop-title">{p.titulo}</div>
                   <div className="admin-prop-meta">{p.comuna} · {TIPO_LABEL[p.tipo]}</div>
                 </td>
-                <td style={{ fontFamily: "var(--font-mono)", fontSize: 13 }}>{fmtCLP(p.precio)}</td>
+                <td style={{ fontFamily: "var(--font-mono)", fontSize: 13 }}>{fmtPrecio(p)}</td>
                 <td>
                   <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                     <span className="admin-badge">{p.operacion === "venta" ? "Venta" : "Arriendo"}</span>

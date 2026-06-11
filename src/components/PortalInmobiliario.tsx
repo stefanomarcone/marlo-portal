@@ -7,6 +7,7 @@ interface Property {
   titulo: string;
   operacion: string;
   precio: number;
+  moneda?: string;
   tipo: string;
   dormitorios: number;
   banos: number;
@@ -25,14 +26,25 @@ interface Property {
   etiquetas: string;
 }
 
+const UF_VALOR = 38500;
 const fmtCLP = (n: number) => {
   if (!n && n !== 0) return "—";
   return "$" + n.toLocaleString("es-CL").replace(/,/g, ".");
 };
 const fmtUF = (clp: number) => {
-  const uf = clp / 38500;
+  const uf = clp / UF_VALOR;
   return uf.toLocaleString("es-CL", { maximumFractionDigits: 0 }) + " UF";
 };
+const fmtPrecio = (p: { precio: number; moneda?: string }) => {
+  if (!p.precio && p.precio !== 0) return "—";
+  if (p.moneda === "uf") return p.precio.toLocaleString("es-CL", { maximumFractionDigits: 0 }) + " UF";
+  return fmtCLP(p.precio);
+};
+const fmtPrecioAlt = (p: { precio: number; moneda?: string }) => {
+  if (p.moneda === "uf") return fmtCLP(Math.round(p.precio * UF_VALOR));
+  return fmtUF(p.precio);
+};
+const precioEnCLP = (p: { precio: number; moneda?: string }) => (p.moneda === "uf" ? p.precio * UF_VALOR : p.precio);
 const fmtN = (n: number) => n.toLocaleString("es-CL").replace(/,/g, ".");
 
 const TIPO_LABEL: Record<string, string> = {
@@ -191,7 +203,7 @@ function PropertyCard({ p, featured, onClick, fav, onFav }: {
         <div className="card-loc">{p.comuna} · {p.ciudad}</div>
         <h3 className="card-title">{p.titulo}</h3>
         <div className="card-price">
-          {fmtCLP(p.precio)}
+          {fmtPrecio(p)}
           {p.operacion === "arriendo" && <span className="uf">/ mes</span>}
         </div>
         <div className="card-specs">
@@ -291,9 +303,9 @@ function PropertyDetail({ p, onClose, fav, onFav }: {
           <aside className="detail-rail">
             <div className="detail-price-card">
               <div className="detail-price-label">{p.operacion === "venta" ? "Precio de venta" : "Arriendo mensual"}</div>
-              <div className="detail-price">{fmtCLP(p.precio)}</div>
+              <div className="detail-price">{fmtPrecio(p)}</div>
               <div className="detail-price-sub">
-                <span>≈ {fmtUF(p.precio)}</span>
+                <span>≈ {fmtPrecioAlt(p)}</span>
                 {p.gastos_comunes > 0 && <span>Gastos comunes: {fmtCLP(p.gastos_comunes)}</span>}
               </div>
               <div className="detail-actions">
@@ -451,8 +463,8 @@ export default function PortalInmobiliario() {
       return true;
     });
     if (sort === "destacadas") r = [...r].sort((a, b) => (b.destacado ? 1 : 0) - (a.destacado ? 1 : 0));
-    else if (sort === "precio-asc") r = [...r].sort((a, b) => a.precio - b.precio);
-    else if (sort === "precio-desc") r = [...r].sort((a, b) => b.precio - a.precio);
+    else if (sort === "precio-asc") r = [...r].sort((a, b) => precioEnCLP(a) - precioEnCLP(b));
+    else if (sort === "precio-desc") r = [...r].sort((a, b) => precioEnCLP(b) - precioEnCLP(a));
     else if (sort === "metros-desc") r = [...r].sort((a, b) => b.metros - a.metros);
     return r;
   }, [properties, filters, sort]);
