@@ -118,24 +118,33 @@ function AddressSection({ form, set }: { form: Record<string, unknown>; set: (k:
   const [query, setQuery] = useState(String(form.direccion || ""));
   const [suggestions, setSuggestions] = useState<NominatimResult[]>([]);
   const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
+  const skipNextSearchRef = useRef(false);
 
-  const search = useCallback((q: string) => {
-    if (q.length < 4) { setSuggestions([]); return; }
-    fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q + ", Chile")}&format=json&addressdetails=1&limit=6&accept-language=es`)
-      .then((r) => r.json())
-      .then((data: NominatimResult[]) => { setSuggestions(data); setOpen(true); })
-      .catch(() => {});
+  const search = useCallback(async (q: string) => {
+    if (q.length < 4) { setSuggestions([]); setOpen(false); return; }
+    setLoading(true);
+    try {
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q + ", Chile")}&format=json&addressdetails=1&limit=6&accept-language=es&countrycodes=cl`);
+      const data = await res.json() as NominatimResult[];
+      setSuggestions(data);
+      setOpen(true);
+    } catch {
+      setSuggestions([]);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
+    if (skipNextSearchRef.current) { skipNextSearchRef.current = false; return; }
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = setTimeout(() => search(query), 450);
     return () => { if (timerRef.current) clearTimeout(timerRef.current); };
   }, [query, search]);
 
-  // close on click outside
   useEffect(() => {
     const handler = (e: MouseEvent) => { if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false); };
     document.addEventListener("mousedown", handler);
@@ -143,16 +152,18 @@ function AddressSection({ form, set }: { form: Record<string, unknown>; set: (k:
   }, []);
 
   const pick = (r: NominatimResult) => {
-    const a = r.address;
+    const a = r.address || {};
     const street = [a.road, a.house_number].filter(Boolean).join(" ");
     const comuna = a.suburb || a.municipality || "";
     const ciudad = a.city || a.town || a.municipality || "";
     const short = street || r.display_name.split(",")[0];
+    skipNextSearchRef.current = true;
     setQuery(short);
     set("direccion", short);
     if (comuna) set("comuna", comuna);
     if (ciudad) set("ciudad", ciudad);
-    setSuggestions([]); setOpen(false);
+    setSuggestions([]);
+    setOpen(false);
   };
 
   return (
@@ -160,20 +171,24 @@ function AddressSection({ form, set }: { form: Record<string, unknown>; set: (k:
       <div className="form-section-title">Ubicación</div>
       <div className="form-grid">
         <div className="form-field span-2" style={{ position: "relative" }} ref={wrapRef}>
-          <label>Dirección *</label>
+          <label>Dirección * {loading && <span style={{ fontSize: 11, color: "var(--ink-3)", marginLeft: 6 }}>buscando…</span>}</label>
           <input
             value={query}
             onChange={(e) => { setQuery(e.target.value); set("direccion", e.target.value); }}
-            onFocus={() => suggestions.length > 0 && setOpen(true)}
+            onFocus={() => { if (suggestions.length > 0) setOpen(true); }}
             placeholder="Av. Providencia 1234, Depto 501"
             autoComplete="off"
           />
           {open && suggestions.length > 0 && (
-            <ul style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 99, background: "var(--bg-card)", border: "1px solid var(--line)", listStyle: "none", margin: 0, padding: 0, boxShadow: "0 8px 24px rgba(20,19,15,0.1)", maxHeight: 240, overflowY: "auto" }}>
+            <ul style={{ position: "absolute", top: "calc(100% + 2px)", left: 0, right: 0, zIndex: 99, background: "var(--bg-card)", border: "1px solid var(--line)", listStyle: "none", margin: 0, padding: 0, boxShadow: "0 8px 24px rgba(20,19,15,0.1)", maxHeight: 240, overflowY: "auto" }}>
               {suggestions.map((r, i) => (
-                <li key={i} onMouseDown={() => pick(r)} style={{ padding: "10px 14px", fontSize: 13, cursor: "pointer", borderBottom: "1px solid var(--line-2)", lineHeight: 1.4 }}
+                <li
+                  key={i}
+                  onMouseDown={(e) => { e.preventDefault(); pick(r); }}
+                  style={{ padding: "10px 14px", fontSize: 13, cursor: "pointer", borderBottom: "1px solid var(--line-2)", lineHeight: 1.4 }}
                   onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-warm)")}
-                  onMouseLeave={(e) => (e.currentTarget.style.background = "")}>
+                  onMouseLeave={(e) => (e.currentTarget.style.background = "")}
+                >
                   {r.display_name}
                 </li>
               ))}
