@@ -487,6 +487,10 @@ export default function PortalInmobiliario() {
       <header className={`nav${scrolled ? " scrolled" : ""}`}>
         <div className="nav-inner">
           <div className="logo" style={{ cursor: "pointer" }} onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}>
+            <svg width="24" height="17" viewBox="0 0 100 70" fill="none" stroke="currentColor" strokeWidth="8" strokeLinejoin="miter" style={{ display: "block" }}>
+              <path d="M 5 65 L 30 5 L 55 65" />
+              <path d="M 45 65 L 70 5 L 95 65" />
+            </svg>
             <span className="logo-mark">Marlo<em>.</em></span>
             <span className="logo-sub">Propiedades</span>
           </div>
